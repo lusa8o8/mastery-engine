@@ -36,7 +36,7 @@ export default function SummaryPage() {
       const sessionQuery = sessionId
         ? supabase.from('sessions').select('*').eq('id', sessionId).single()
         : supabase.from('sessions').select('*').eq('user_id', user.id)
-            .order('created_at', { ascending: false }).limit(1).single()
+          .order('created_at', { ascending: false }).limit(1).single()
 
       const { data: sessionData, error: sessionError } = await sessionQuery
       if (sessionError) throw sessionError
@@ -232,8 +232,8 @@ export default function SummaryPage() {
       <hr className="divider" />
 
       <div className="row" style={{ gap: '1rem' }}>
-        <button className="primary" onClick={() => navigate('/vault')}>
-          Back to vault
+        <button className="primary" onClick={() => navigate('/home')}>
+          Home
         </button>
         <button className="secondary" onClick={() => navigate('/upload')}>
           Upload more papers

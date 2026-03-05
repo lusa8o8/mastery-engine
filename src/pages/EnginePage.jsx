@@ -436,26 +436,41 @@ export default function EnginePage() {
               onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSend('answer') }}
               style={{ marginBottom: '0.5rem' }}
             />
-            <div className="row">
-              <button className="primary" onClick={() => handleSend('answer')}
-                disabled={loading || !answerInput.trim()}>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                className="primary"
+                onClick={() => handleSend('answer')}
+                disabled={loading || !answerInput.trim()}
+                style={{ flex: '1', minWidth: '120px' }}
+              >
                 Submit
               </button>
-              <button className="secondary" onClick={() => handleSend('next', 'I am ready for the next question.')}
-                disabled={loading}>
-                Next question
+              <button
+                className="secondary"
+                onClick={() => handleSend('next', 'I am ready for the next question.')}
+                disabled={loading}
+                style={{ flex: '1', minWidth: '120px' }}
+              >
+                Next
               </button>
-              <button className="secondary" onClick={handleRequestVariant}
-                disabled={loading}>
-                + AI variant
+              <button
+                className="secondary"
+                onClick={handleRequestVariant}
+                disabled={loading}
+                style={{ flex: '1', minWidth: '100px' }}
+              >
+                + Variant
               </button>
               {nextLayer && (
-                <button className="ghost" onClick={handleNextLayer} disabled={loading}>
+                <button
+                  className="ghost"
+                  onClick={handleNextLayer}
+                  disabled={loading}
+                  style={{ flex: '1', minWidth: '100px' }}
+                >
                   {nextLayer.label} →
                 </button>
               )}
-              <span className="spacer" />
-              <span className="muted" style={{ fontSize: '0.75rem' }}>Ctrl+Enter</span>
             </div>
           </>
         ) : (
