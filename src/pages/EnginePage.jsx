@@ -16,6 +16,23 @@ const ERROR_TYPES = {
   recall_failure: 'Recall Failure'
 }
 
+function renderMarkdown(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/^(\d+)\. (.+)$/gm, '<div style="margin-bottom:0.4rem"><strong>$1.</strong> $2</div>')
+    .replace(/^[-•] (.+)$/gm, '<div style="margin-bottom:0.4rem; padding-left:1rem">· $1</div>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>')
+}
+
 async function askClaude(systemPrompt, messages) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -224,7 +241,7 @@ export default function EnginePage() {
               >
                 {m.role === 'user' ? 'You' : 'Engine'}
               </p>
-              <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.7' }}>{m.content}</div>
+              <div style={{ lineHeight: '1.7' }} dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
             </div>
           ))}
 
