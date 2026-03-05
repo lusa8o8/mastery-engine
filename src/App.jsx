@@ -5,6 +5,7 @@ import UploadPage from './pages/UploadPage'
 import VaultPage from './pages/VaultPage'
 import EnginePage from './pages/EnginePage'
 import SummaryPage from './pages/SummaryPage'
+import ProgressPage from './pages/ProgressPage'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/vault" element={<ProtectedRoute><VaultPage /></ProtectedRoute>} />
         <Route path="/engine/:topic" element={<ProtectedRoute><EnginePage /></ProtectedRoute>} />
         <Route path="/summary" element={<ProtectedRoute><SummaryPage /></ProtectedRoute>} />
+        <Route path="/progress" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/auth" replace />} />
       </Routes>
     </BrowserRouter>
