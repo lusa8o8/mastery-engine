@@ -81,12 +81,20 @@ export default function HomePage() {
         <h1 style={{ marginBottom: 0 }}>Solvd</h1>
         <span className="spacer" />
         <button
-          className="ghost"
-          style={{ fontSize: '0.8rem', minHeight: 'unset', padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '2px' }}
           onClick={cycleTheme}
-        >
-          {theme}
-        </button>
+          title={`Theme: ${theme}`}
+          style={{
+            width: '22px',
+            height: '22px',
+            borderRadius: '50%',
+            border: '1.5px solid var(--border)',
+            background: { paper: '#F5F0E8', white: '#FFFFFF', dark: '#1A1714', forest: '#1A2E1A' }[theme],
+            cursor: 'pointer',
+            padding: 0,
+            minHeight: 'unset',
+            flexShrink: 0
+          }}
+        />
         <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={handleSignOut}>
           Sign out
         </button>
