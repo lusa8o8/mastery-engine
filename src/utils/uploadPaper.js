@@ -12,17 +12,19 @@ export async function uploadPaper(file, userId) {
 
   if (storageError) throw storageError
 
-  // Get public URL
-  const { data: urlData } = supabase.storage
+  // Get signed URL (valid for 1 hour — enough for extraction)
+  const { data: signedData, error: signedError } = await supabase.storage
     .from('papers')
-    .getPublicUrl(fileName)
+    .createSignedUrl(fileName, 3600)
+
+  if (signedError) throw signedError
 
   // Save record to papers table
   const { data, error: dbError } = await supabase
     .from('papers')
     .insert({
       user_id: userId,
-      file_url: urlData.publicUrl,
+      file_url: signedData.signedUrl,
       file_type: fileType
     })
     .select()
