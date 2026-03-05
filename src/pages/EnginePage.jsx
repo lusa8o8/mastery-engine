@@ -405,7 +405,7 @@ export default function EnginePage() {
         maxWidth: '680px',
         background: 'var(--bg)',
         borderTop: '1px solid var(--border)',
-        padding: '1rem 1.5rem'
+        padding: '0.6rem 1rem'
       }}>
         {/* Input mode toggle */}
         <div className="row" style={{ marginBottom: '0.75rem', gap: '0.5rem' }}>
@@ -431,10 +431,10 @@ export default function EnginePage() {
               value={answerInput}
               onChange={e => setAnswerInput(e.target.value)}
               placeholder="Paste your working here…"
-              rows={3}
+              rows={2}
               disabled={loading}
               onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSend('answer') }}
-              style={{ marginBottom: '0.75rem' }}
+              style={{ marginBottom: '0.5rem' }}
             />
             <div className="row">
               <button className="primary" onClick={() => handleSend('answer')}
@@ -464,10 +464,10 @@ export default function EnginePage() {
               value={clarifyInput}
               onChange={e => setClarifyInput(e.target.value)}
               placeholder="Ask anything about this topic or question…"
-              rows={3}
+              rows={2}
               disabled={loading}
               onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSend('clarify') }}
-              style={{ marginBottom: '0.75rem' }}
+              style={{ marginBottom: '0.5rem' }}
             />
             <div className="row">
               <button className="primary" onClick={() => handleSend('clarify')}

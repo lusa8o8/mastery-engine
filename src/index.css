@@ -1,5 +1,49 @@
 /* ── Solvd Design System ── */
 
+[data-theme="paper"] {
+  --bg: #F5F0E8;
+  --bg-subtle: #EDE8DC;
+  --fg: #1C1917;
+  --fg-muted: #6B6560;
+  --border: #C8BFB0;
+  --border-focus: #1C1917;
+  --error: #8B2020;
+  --success: #2D5A27;
+}
+
+[data-theme="white"] {
+  --bg: #FFFFFF;
+  --bg-subtle: #F7F7F7;
+  --fg: #111111;
+  --fg-muted: #666666;
+  --border: #DDDDDD;
+  --border-focus: #111111;
+  --error: #CC0000;
+  --success: #1A6B3C;
+}
+
+[data-theme="dark"] {
+  --bg: #1A1714;
+  --bg-subtle: #211E1A;
+  --fg: #EDE8DF;
+  --fg-muted: #8C867E;
+  --border: #3D3830;
+  --border-focus: #EDE8DF;
+  --error: #C0392B;
+  --success: #3A7A33;
+}
+
+[data-theme="forest"] {
+  --bg: #1A2E1A;
+  --bg-subtle: #1F351F;
+  --fg: #E8F0E8;
+  --fg-muted: #7A9A7A;
+  --border: #2E4A2E;
+  --border-focus: #E8F0E8;
+  --error: #C0392B;
+  --success: #5AAA5A;
+}
+
 :root {
   --bg: #F5F0E8;
   --bg-subtle: #EDE8DC;
@@ -14,20 +58,9 @@
   --font: Georgia, 'Charter', 'Times New Roman', Times, serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1A1714;
-    --bg-subtle: #211E1A;
-    --fg: #EDE8DF;
-    --fg-muted: #8C867E;
-    --border: #3D3830;
-    --border-focus: #EDE8DF;
-    --error: #C0392B;
-    --success: #3A7A33;
-  }
-}
-
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -170,7 +203,8 @@ button:disabled {
   margin-bottom: 0.35rem;
 }
 
-input, textarea {
+input,
+textarea {
   font-family: var(--font);
   font-size: 0.95rem;
   width: 100%;
@@ -185,7 +219,8 @@ input, textarea {
   -webkit-appearance: none;
 }
 
-input:focus, textarea:focus {
+input:focus,
+textarea:focus {
   border-color: var(--border-focus);
 }
 
@@ -196,7 +231,8 @@ textarea {
 
 /* ── Divider ── */
 
-hr, .divider {
+hr,
+.divider {
   border: none;
   border-top: 1px solid var(--border);
   margin: 1.75rem 0;

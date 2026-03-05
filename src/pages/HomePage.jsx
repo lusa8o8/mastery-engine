@@ -4,12 +4,26 @@ import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../api/supabase'
 import { getUserTokens } from '../utils/logTokens'
 
+const THEMES = ['paper', 'white', 'dark', 'forest']
+const THEME_LABELS = { paper: '📄', white: '⬜', dark: '⬛', forest: '🌲' }
+
 export default function HomePage() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [recentSessions, setRecentSessions] = useState([])
   const [tokenData, setTokenData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [theme, setTheme] = useState(() => localStorage.getItem('solvd-theme') || 'paper')
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('solvd-theme', theme)
+  }, [theme])
+
+  function cycleTheme() {
+    const idx = THEMES.indexOf(theme)
+    setTheme(THEMES[(idx + 1) % THEMES.length])
+  }
 
   useEffect(() => {
     if (!user) return
@@ -59,6 +73,14 @@ export default function HomePage() {
       <div className="row" style={{ marginBottom: '2.5rem' }}>
         <h1 style={{ marginBottom: 0 }}>Solvd</h1>
         <span className="spacer" />
+        <button
+          className="ghost"
+          style={{ fontSize: '1rem', minHeight: 'unset', padding: '0 0.25rem' }}
+          onClick={cycleTheme}
+          title={`Theme: ${theme}`}
+        >
+          {THEME_LABELS[theme]}
+        </button>
         <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={handleSignOut}>
           Sign out
         </button>
