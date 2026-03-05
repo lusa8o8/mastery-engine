@@ -116,7 +116,7 @@ export async function extractAndSave(paper) {
   const rows = questions.map(q => ({
     paper_id: paper.id,
     user_id: paper.user_id,
-    raw_text: q.raw_text,
+    raw_text: q.raw_text || q.question || q.text || q.content || '',
     topic: q.topic,
     sub_type: q.sub_type,
     source: 'extracted',
