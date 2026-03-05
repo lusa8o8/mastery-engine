@@ -223,7 +223,7 @@ export default function EnginePage() {
 
   async function handleNextLayer() {
     if (!nextLayer) {
-      navigate('/summary')
+      navigate(`/summary?session=${sessionId}`)
       return
     }
     setLoading(true)
