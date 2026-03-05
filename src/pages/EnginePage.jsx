@@ -266,7 +266,7 @@ export default function EnginePage() {
       <div className="row" style={{ marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ marginBottom: '0.1rem' }}>{subType}</h1>
-          <p className="muted" style={{ fontSize: '0.85rem' }}>{topic} · {currentLayerLabel}</p>
+          <p className="muted" style={{ fontSize: '0.85rem' }}>{topic} · {currentLayerLabel} · Solvd</p>
         </div>
         <span className="spacer" />
         <button className="ghost" onClick={() => navigate('/vault')}>← Vault</button>

@@ -60,7 +60,7 @@ export default function UploadPage() {
 
   return (
     <div className="page">
-      <h1>Upload papers</h1>
+      <h1>Upload</h1>
       <p className="muted" style={{ marginBottom: '2rem' }}>
         Upload past papers or tutorial sheets. PDF and images accepted. Max 20MB per file.
       </p>

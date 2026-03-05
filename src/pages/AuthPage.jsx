@@ -36,7 +36,7 @@ export default function AuthPage() {
 
   return (
     <div className="page-narrow">
-      <h1>Mastery Engine</h1>
+      <h1>Solvd</h1>
       <p className="muted" style={{ marginBottom: '2rem' }}>
         {mode === 'login' ? 'Sign in to continue.' : 'Create an account to begin.'}
       </p>
@@ -61,6 +61,9 @@ export default function AuthPage() {
         <button className="ghost" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setMessage('') }}>
           {mode === 'login' ? 'Sign up' : 'Sign in'}
         </button>
+      </p>
+      <p className="muted" style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.78rem' }}>
+        Powered by Anthropic
       </p>
     </div>
   )

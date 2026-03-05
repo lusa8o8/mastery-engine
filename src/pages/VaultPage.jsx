@@ -61,7 +61,7 @@ export default function VaultPage() {
   return (
     <div className="page">
       <div className="row" style={{ marginBottom: '2rem' }}>
-        <h1 style={{ marginBottom: 0 }}>Your vault</h1>
+        <h1 style={{ marginBottom: 0 }}>Your papers</h1>
         <span className="spacer" />
         <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/progress')}>
           Progress
