@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../api/supabase'
 import { LAYERS } from '../utils/constants'
+import { getSessionTokens } from '../utils/logTokens'
 
 const ERROR_LABELS = {
   conceptual_gap: 'Conceptual Gap',
@@ -22,6 +23,7 @@ export default function SummaryPage() {
   const [attempts, setAttempts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [tokenData, setTokenData] = useState(null)
 
   useEffect(() => {
     if (!user) return
@@ -48,6 +50,13 @@ export default function SummaryPage() {
 
       if (attemptsError) throw attemptsError
       setAttempts(attemptsData)
+
+      try {
+        const tokens = await getSessionTokens(sessionData.id)
+        setTokenData(tokens)
+      } catch (e) {
+        console.error('Token fetch failed:', e)
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -179,6 +188,38 @@ export default function SummaryPage() {
             {dominantError[0] === 'time_pressure' && 'Practice the Pressure layer until recognition becomes automatic.'}
             {dominantError[0] === 'recall_failure' && 'Return in 7 days for the Recall layer to reinforce retention.'}
           </p>
+        </div>
+      )}
+
+      {tokenData && (
+        <div style={{ marginBottom: '2rem' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Session usage</h2>
+          <div className="row" style={{ gap: '2rem', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontSize: '1.4rem', fontWeight: 'normal', lineHeight: 1 }}>
+                {tokenData.totalTokens.toLocaleString()}
+              </p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Total tokens</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '1.4rem', fontWeight: 'normal', lineHeight: 1 }}>
+                ${tokenData.estimatedCost.toFixed(4)}
+              </p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Estimated cost</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '1.4rem', fontWeight: 'normal', lineHeight: 1 }}>
+                {tokenData.inputTokens.toLocaleString()}
+              </p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Input tokens</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '1.4rem', fontWeight: 'normal', lineHeight: 1 }}>
+                {tokenData.outputTokens.toLocaleString()}
+              </p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Output tokens</p>
+            </div>
+          </div>
         </div>
       )}
 

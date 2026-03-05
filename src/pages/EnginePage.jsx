@@ -5,6 +5,7 @@ import { getQuestionsForSubType } from '../utils/getQuestions'
 import { getSystemPrompt, getUserMessage } from '../utils/enginePrompts'
 import { LAYERS, getNextLayer } from '../utils/constants'
 import { supabase } from '../api/supabase'
+import { logTokens } from '../utils/logTokens'
 
 const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
 
@@ -35,7 +36,7 @@ function renderMarkdown(text) {
     .replace(/\n/g, '<br>')
 }
 
-async function askClaude(systemPrompt, messages) {
+async function askClaude(systemPrompt, messages, userId, sessionId, context) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -53,6 +54,18 @@ async function askClaude(systemPrompt, messages) {
   })
   const data = await response.json()
   if (!response.ok) throw new Error(data.error?.message || 'API error')
+
+  if (data.usage) {
+    logTokens({
+      userId,
+      sessionId,
+      inputTokens: data.usage.input_tokens,
+      outputTokens: data.usage.output_tokens,
+      model: 'claude-haiku-4-5-20251001',
+      context: context || 'engine'
+    })
+  }
+
   return data.content[0].text
 }
 
@@ -131,7 +144,7 @@ export default function EnginePage() {
       setQuestions(qs)
       const systemPrompt = getSystemPrompt(topic, subType, 'foundation', qs)
       const userMsg = getUserMessage('start', 'foundation')
-      const reply = await askClaude(systemPrompt, [{ role: 'user', content: userMsg }])
+      const reply = await askClaude(systemPrompt, [{ role: 'user', content: userMsg }], user.id, sessionId, 'foundation_start')
       setMessages([
         { role: 'user', content: userMsg },
         { role: 'assistant', content: reply }
@@ -166,7 +179,7 @@ export default function EnginePage() {
 
     try {
       const systemPrompt = getSystemPrompt(topic, subType, currentLayer, questions)
-      const reply = await askClaude(systemPrompt, newMessages)
+      const reply = await askClaude(systemPrompt, newMessages, user.id, sessionId, 'engine_turn')
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
 
       if (action !== 'clarify' && action !== 'next') {
@@ -246,7 +259,7 @@ export default function EnginePage() {
 
     try {
       const systemPrompt = getSystemPrompt(topic, subType, newLayer, questions)
-      const reply = await askClaude(systemPrompt, newMessages)
+      const reply = await askClaude(systemPrompt, newMessages, user.id, sessionId, 'layer_transition')
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
     } catch (e) {
       setError(e.message)
