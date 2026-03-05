@@ -19,14 +19,20 @@ export default function HomePage() {
   async function loadHome() {
     setLoading(true)
     try {
-      const { data: sessions } = await supabase
+      const { data: allSessions } = await supabase
         .from('sessions')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(5)
 
-      setRecentSessions(sessions || [])
+      const seen = new Set()
+      const sessions = (allSessions || []).filter(s => {
+        if (seen.has(s.topic)) return false
+        seen.add(s.topic)
+        return true
+      }).slice(0, 5)
+
+      setRecentSessions(sessions)
 
       const tokens = await getUserTokens(user.id)
       setTokenData(tokens)
