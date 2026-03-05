@@ -21,7 +21,7 @@ export default function AuthPage() {
     try {
       if (mode === 'login') {
         await signIn(email, password)
-        navigate('/vault')
+        navigate('/upload')
       } else {
         await signUp(email, password)
         setMessage('Check your email to confirm your account, then log in.')
