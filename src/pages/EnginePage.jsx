@@ -56,23 +56,58 @@ async function askClaude(systemPrompt, messages) {
   return data.content[0].text
 }
 
+async function generateVariant(topic, subType, layer, previousQuestions) {
+  const questionList = previousQuestions.map(q => q.raw_text).join('\n')
+  const variantPrompt = `You are a math exam question generator for "${subType}" in "${topic}".
+Study these real exam questions carefully:
+${questionList}
+
+Generate ONE new exam-style question that:
+- Matches the difficulty and style of the questions above
+- Tests the same concept but with different numbers or framing
+- For layer "${layer}": ${layer === 'traps' ? 'includes an examiner trick or trap' : layer === 'pressure' ? 'combines multiple concepts under time pressure' : 'is a clean direct application'}
+
+Return ONLY the question text. No explanation. No preamble.`
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system: variantPrompt,
+      messages: [{ role: 'user', content: 'Generate the question.' }]
+    })
+  })
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.error?.message || 'Variant generation failed')
+  return data.content[0].text
+}
+
 export default function EnginePage() {
   const { topic: encoded } = useParams()
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  // Decode topic__subType__sessionId from URL
   const [topic, subType, sessionId] = decodeURIComponent(encoded).split('__')
 
   const [currentLayer, setCurrentLayer] = useState('foundation')
-  const [messages, setMessages] = useState([]) // { role: 'assistant'|'user', content }
-  const [input, setInput] = useState('')
+  const [messages, setMessages] = useState([])
+  const [answerInput, setAnswerInput] = useState('')
+  const [clarifyInput, setClarifyInput] = useState('')
+  const [inputMode, setInputMode] = useState('answer')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [questions, setQuestions] = useState([])
   const [showErrorClassifier, setShowErrorClassifier] = useState(false)
   const [pendingAnswer, setPendingAnswer] = useState('')
   const [initialized, setInitialized] = useState(false)
+  const [variantCount, setVariantCount] = useState(0)
   const bottomRef = useRef(null)
 
   const currentLayerLabel = LAYERS.find(l => l.id === currentLayer)?.label || currentLayer
@@ -108,28 +143,33 @@ export default function EnginePage() {
     }
   }
 
-  async function handleSend(action = 'answer', content = input) {
-    if (!content.trim() && action === 'answer') return
+  async function handleSend(action, content) {
+    const text = content || (inputMode === 'clarify' ? clarifyInput : answerInput)
+    if (!text.trim()) return
     setLoading(true)
     setError('')
+    setShowErrorClassifier(false)
 
-    const userContent = getUserMessage(action, content)
+    const userContent = action === 'clarify'
+      ? `[Clarification request] ${text}`
+      : getUserMessage(action || 'answer', text)
+
     const newMessages = [...messages, { role: 'user', content: userContent }]
     setMessages(newMessages)
-    setInput('')
 
-    if (action === 'answer') {
-      setPendingAnswer(content)
-      setShowErrorClassifier(false)
+    if (action !== 'clarify' && action !== 'next') {
+      setPendingAnswer(text)
     }
+
+    if (inputMode === 'clarify') setClarifyInput('')
+    else setAnswerInput('')
 
     try {
       const systemPrompt = getSystemPrompt(topic, subType, currentLayer, questions)
       const reply = await askClaude(systemPrompt, newMessages)
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
 
-      // Show error classifier after answer correction
-      if (action === 'answer') {
+      if (action !== 'clarify' && action !== 'next') {
         setShowErrorClassifier(true)
       }
     } catch (e) {
@@ -139,9 +179,34 @@ export default function EnginePage() {
     }
   }
 
+  async function handleRequestVariant() {
+    setLoading(true)
+    setError('')
+    try {
+      const variantText = await generateVariant(topic, subType, currentLayer, questions)
+      setVariantCount(v => v + 1)
+      const variantQuestion = {
+        id: `variant_${variantCount}`,
+        raw_text: variantText,
+        topic,
+        sub_type: subType,
+        source: 'ai_generated',
+        difficulty_hint: currentLayer === 'traps' ? 'advanced' : 'intermediate'
+      }
+      setQuestions(prev => [...prev, variantQuestion])
+
+      const announcement = `[AI Variant #${variantCount + 1}]\n\n${variantText}`
+      const newMessages = [...messages, { role: 'assistant', content: announcement }]
+      setMessages(newMessages)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleErrorClassify(errorType) {
     setShowErrorClassifier(false)
-    // Log attempt to DB
     try {
       await supabase.from('attempts').insert({
         session_id: sessionId,
@@ -165,7 +230,6 @@ export default function EnginePage() {
     setError('')
     const newLayer = nextLayer.id
 
-    // Update session in DB
     try {
       await supabase
         .from('sessions')
@@ -191,8 +255,13 @@ export default function EnginePage() {
     }
   }
 
+  const visibleMessages = messages.filter(m =>
+    !m.content.startsWith('Start the') &&
+    !m.content.startsWith('I have completed')
+  )
+
   return (
-    <div className="page" style={{ paddingBottom: '12rem' }}>
+    <div className="page" style={{ paddingBottom: '16rem' }}>
       {/* Header */}
       <div className="row" style={{ marginBottom: '1.5rem' }}>
         <div>
@@ -204,19 +273,16 @@ export default function EnginePage() {
       </div>
 
       {/* Layer progress */}
-      <div className="row" style={{ marginBottom: '2rem', gap: '0.5rem' }}>
+      <div className="row" style={{ marginBottom: '2rem', gap: '0.5rem', flexWrap: 'wrap' }}>
         {LAYERS.map(l => (
-          <span
-            key={l.id}
-            style={{
-              fontSize: '0.75rem',
-              padding: '0.2rem 0.6rem',
-              border: '1px solid var(--border)',
-              borderRadius: '2px',
-              color: l.id === currentLayer ? 'var(--bg)' : 'var(--fg-muted)',
-              background: l.id === currentLayer ? 'var(--fg)' : 'transparent'
-            }}
-          >
+          <span key={l.id} style={{
+            fontSize: '0.75rem',
+            padding: '0.2rem 0.6rem',
+            border: '1px solid var(--border)',
+            borderRadius: '2px',
+            color: l.id === currentLayer ? 'var(--bg)' : 'var(--fg-muted)',
+            background: l.id === currentLayer ? 'var(--fg)' : 'transparent'
+          }}>
             {l.label}
           </span>
         ))}
@@ -226,32 +292,35 @@ export default function EnginePage() {
 
       {/* Conversation */}
       <div style={{ marginBottom: '1.5rem' }}>
-        {messages
-          .filter(m => !m.content.startsWith('Start the') && !m.content.startsWith('I have completed'))
-          .map((m, i) => (
+        {visibleMessages.map((m, i) => (
+          <div key={i} style={{
+            marginBottom: '1.5rem',
+            paddingLeft: m.role === 'user' ? '1.5rem' : '0',
+            borderLeft: m.role === 'user' ? '2px solid var(--border)' : 'none'
+          }}>
+            <p className="muted" style={{
+              fontSize: '0.75rem',
+              marginBottom: '0.35rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}>
+              {m.role === 'user' ? 'You' : 'Engine'}
+            </p>
             <div
-              key={i}
-              style={{
-                marginBottom: '1.5rem',
-                paddingLeft: m.role === 'user' ? '1.5rem' : '0',
-                borderLeft: m.role === 'user' ? '2px solid var(--border)' : 'none'
-              }}
-            >
-              <p
-                className="muted"
-                style={{ fontSize: '0.75rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-              >
-                {m.role === 'user' ? 'You' : 'Engine'}
-              </p>
-              <div style={{ lineHeight: '1.7' }} dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
-            </div>
-          ))}
+              style={{ lineHeight: '1.7' }}
+              dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }}
+            />
+          </div>
+        ))}
 
         {loading && (
           <div>
-            <p className="muted" style={{ fontSize: '0.75rem', marginBottom: '0.35rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Engine
-            </p>
+            <p className="muted" style={{
+              fontSize: '0.75rem',
+              marginBottom: '0.35rem',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em'
+            }}>Engine</p>
             <p className="muted">Thinking…</p>
           </div>
         )}
@@ -260,19 +329,23 @@ export default function EnginePage() {
 
       {/* Error classifier */}
       {showErrorClassifier && (
-        <div style={{ marginBottom: '1.5rem', padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-          <p style={{ marginBottom: '0.75rem', fontSize: '0.9rem' }}>Classify your error (or mark correct):</p>
+        <div style={{
+          marginBottom: '1.5rem',
+          padding: '1rem',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)'
+        }}>
+          <p style={{ marginBottom: '0.75rem', fontSize: '0.9rem' }}>
+            How did that go?
+          </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => handleErrorClassify(null)}>
-              ✓ Correct
+            <button className="secondary" style={{ fontSize: '0.85rem' }}
+              onClick={() => handleErrorClassify(null)}>
+              ✓ Got it right
             </button>
             {Object.entries(ERROR_TYPES).map(([key, label]) => (
-              <button
-                key={key}
-                className="secondary"
-                style={{ fontSize: '0.85rem' }}
-                onClick={() => handleErrorClassify(key)}
-              >
+              <button key={key} className="secondary" style={{ fontSize: '0.85rem' }}
+                onClick={() => handleErrorClassify(key)}>
                 {label}
               </button>
             ))}
@@ -284,55 +357,86 @@ export default function EnginePage() {
       <div style={{
         position: 'fixed',
         bottom: 0,
-        left: 0,
-        right: 0,
-        background: 'var(--bg)',
-        borderTop: '1px solid var(--border)',
-        padding: '1rem 1.5rem',
-        maxWidth: '680px',
-        margin: '0 auto',
         left: '50%',
         transform: 'translateX(-50%)',
-        width: '100%'
+        width: '100%',
+        maxWidth: '680px',
+        background: 'var(--bg)',
+        borderTop: '1px solid var(--border)',
+        padding: '1rem 1.5rem'
       }}>
-        <textarea
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          placeholder="Paste your working here…"
-          rows={3}
-          disabled={loading}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && e.ctrlKey) handleSend('answer')
-          }}
-          style={{ marginBottom: '0.75rem' }}
-        />
-        <div className="row">
+        {/* Input mode toggle */}
+        <div className="row" style={{ marginBottom: '0.75rem', gap: '0.5rem' }}>
           <button
-            className="primary"
-            onClick={() => handleSend('answer')}
-            disabled={loading || !input.trim()}
+            className={inputMode === 'answer' ? 'primary' : 'secondary'}
+            style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+            onClick={() => setInputMode('answer')}
           >
             Submit working
           </button>
           <button
-            className="secondary"
-            onClick={() => handleSend('next', 'I understand. I am ready for the next question.')}
-            disabled={loading}
+            className={inputMode === 'clarify' ? 'primary' : 'secondary'}
+            style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+            onClick={() => setInputMode('clarify')}
           >
-            Next question
+            Ask clarification
           </button>
-          {nextLayer && (
-            <button
-              className="ghost"
-              onClick={handleNextLayer}
-              disabled={loading}
-            >
-              Next layer →
-            </button>
-          )}
-          <span className="spacer" />
-          <span className="muted" style={{ fontSize: '0.75rem' }}>Ctrl+Enter to submit</span>
         </div>
+
+        {inputMode === 'answer' ? (
+          <>
+            <textarea
+              value={answerInput}
+              onChange={e => setAnswerInput(e.target.value)}
+              placeholder="Paste your working here…"
+              rows={3}
+              disabled={loading}
+              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSend('answer') }}
+              style={{ marginBottom: '0.75rem' }}
+            />
+            <div className="row">
+              <button className="primary" onClick={() => handleSend('answer')}
+                disabled={loading || !answerInput.trim()}>
+                Submit
+              </button>
+              <button className="secondary" onClick={() => handleSend('next', 'I am ready for the next question.')}
+                disabled={loading}>
+                Next question
+              </button>
+              <button className="secondary" onClick={handleRequestVariant}
+                disabled={loading}>
+                + AI variant
+              </button>
+              {nextLayer && (
+                <button className="ghost" onClick={handleNextLayer} disabled={loading}>
+                  {nextLayer.label} →
+                </button>
+              )}
+              <span className="spacer" />
+              <span className="muted" style={{ fontSize: '0.75rem' }}>Ctrl+Enter</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <textarea
+              value={clarifyInput}
+              onChange={e => setClarifyInput(e.target.value)}
+              placeholder="Ask anything about this topic or question…"
+              rows={3}
+              disabled={loading}
+              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSend('clarify') }}
+              style={{ marginBottom: '0.75rem' }}
+            />
+            <div className="row">
+              <button className="primary" onClick={() => handleSend('clarify')}
+                disabled={loading || !clarifyInput.trim()}>
+                Ask
+              </button>
+              <span className="spacer" />
+              <span className="muted" style={{ fontSize: '0.75rem' }}>Ctrl+Enter</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
