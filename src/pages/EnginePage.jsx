@@ -21,6 +21,8 @@ function renderMarkdown(text) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+    .replace(/\$\$(.+?)\$\$/gs, '<em style="font-style:italic; font-family: Georgia, serif;">$1</em>')
+    .replace(/\$(.+?)\$/g, '<em style="font-style:italic; font-family: Georgia, serif;">$1</em>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h2>$1</h2>')
