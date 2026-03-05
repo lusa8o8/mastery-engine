@@ -37,7 +37,7 @@ async function callClaude(messages) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: EXTRACT_SYSTEM,
       messages
     })
@@ -61,7 +61,18 @@ function parseQuestions(raw) {
     const clean = raw.replace(/```json|```/g, '').trim()
     return JSON.parse(clean)
   } catch {
-    throw new Error(`Failed to parse questions JSON: ${raw.slice(0, 200)}`)
+    // Try to recover truncated JSON by finding last complete object
+    try {
+      const clean = raw.replace(/```json|```/g, '').trim()
+      const lastBrace = clean.lastIndexOf('},')
+      if (lastBrace === -1) throw new Error('No complete objects found')
+      const recovered = clean.slice(0, lastBrace + 1) + ']'
+      const result = JSON.parse(recovered)
+      if (!Array.isArray(result) || result.length === 0) throw new Error('Empty array')
+      return result
+    } catch {
+      throw new Error(`Failed to parse questions. Raw response: ${raw.slice(0, 300)}`)
+    }
   }
 }
 
