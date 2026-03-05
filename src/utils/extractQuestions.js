@@ -1,28 +1,19 @@
 import { supabase } from '../api/supabase'
-import { llmCall } from '../api/llm'
 
 const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
 
 const EXTRACT_SYSTEM = `You are a math question extractor. 
 Given a past paper or tutorial sheet, extract every math question exactly as written.
-For each question, identify:
+For each question identify:
 - topic: the main math topic (e.g. "Sets", "Functions", "Complex Numbers", "Polynomials")
 - sub_type: the specific sub-type (e.g. "Union and Intersection", "Domain and Range", "Modulus")
 - difficulty_hint: "basic", "intermediate", or "advanced"
 
-Respond ONLY with a valid JSON array. No preamble. No explanation. No markdown.
-Example format:
-[
-  {
-    "raw_text": "If A = {1,2,3} and B = {2,3,4}, find A union B.",
-    "topic": "Sets",
-    "sub_type": "Union and Intersection",
-    "difficulty_hint": "basic"
-  }
-]`
+Respond ONLY with a valid JSON array. No preamble. No explanation. No markdown fences.`
 
 async function fetchFileAsBase64(fileUrl) {
   const response = await fetch(fileUrl)
+  if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`)
   const blob = await response.blob()
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -35,7 +26,7 @@ async function fetchFileAsBase64(fileUrl) {
   })
 }
 
-async function extractFromImage(base64, mimeType) {
+async function callClaude(messages) {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -48,58 +39,20 @@ async function extractFromImage(base64, mimeType) {
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 4096,
       system: EXTRACT_SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mimeType, data: base64 }
-            },
-            {
-              type: 'text',
-              text: 'Extract all math questions from this document. Return only the JSON array.'
-            }
-          ]
-        }
-      ]
+      messages
     })
   })
-  const data = await response.json()
-  return data.content[0].text
-}
 
-async function extractFromPDF(base64) {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
-      system: EXTRACT_SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64 }
-            },
-            {
-              type: 'text',
-              text: 'Extract all math questions from this document. Return only the JSON array.'
-            }
-          ]
-        }
-      ]
-    })
-  })
   const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || `API error ${response.status}`)
+  }
+
+  if (!data.content || !data.content[0]) {
+    throw new Error(`Unexpected API response: ${JSON.stringify(data)}`)
+  }
+
   return data.content[0].text
 }
 
@@ -108,26 +61,47 @@ function parseQuestions(raw) {
     const clean = raw.replace(/```json|```/g, '').trim()
     return JSON.parse(clean)
   } catch {
-    return []
+    throw new Error(`Failed to parse questions JSON: ${raw.slice(0, 200)}`)
   }
 }
 
 export async function extractAndSave(paper) {
-  // Fetch file as base64
   const { base64, mimeType } = await fetchFileAsBase64(paper.file_url)
 
-  // Extract based on file type
-  let raw
+  let messages
   if (paper.file_type === 'pdf') {
-    raw = await extractFromPDF(base64)
+    messages = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'document',
+            source: { type: 'base64', media_type: 'application/pdf', data: base64 }
+          },
+          { type: 'text', text: 'Extract all math questions. Return only the JSON array.' }
+        ]
+      }
+    ]
   } else {
-    raw = await extractFromImage(base64, mimeType)
+    messages = [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: mimeType, data: base64 }
+          },
+          { type: 'text', text: 'Extract all math questions. Return only the JSON array.' }
+        ]
+      }
+    ]
   }
 
+  const raw = await callClaude(messages)
   const questions = parseQuestions(raw)
-  if (!questions.length) throw new Error('No questions extracted')
 
-  // Save to database
+  if (!questions.length) throw new Error('No questions found in document')
+
   const rows = questions.map(q => ({
     paper_id: paper.id,
     user_id: paper.user_id,
