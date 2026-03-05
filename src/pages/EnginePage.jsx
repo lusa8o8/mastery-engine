@@ -405,95 +405,78 @@ export default function EnginePage() {
         maxWidth: '680px',
         background: 'var(--bg)',
         borderTop: '1px solid var(--border)',
-        padding: '0.6rem 1rem'
+        padding: '0.5rem 1rem'
       }}>
-        {/* Input mode toggle */}
-        <div className="row" style={{ marginBottom: '0.75rem', gap: '0.5rem' }}>
+        {/* Single row: mode toggle + action buttons */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
           <button
             className={inputMode === 'answer' ? 'primary' : 'secondary'}
-            style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+            style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem', minHeight: '36px' }}
             onClick={() => setInputMode('answer')}
           >
-            Submit working
+            Working
           </button>
           <button
             className={inputMode === 'clarify' ? 'primary' : 'secondary'}
-            style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+            style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem', minHeight: '36px' }}
             onClick={() => setInputMode('clarify')}
           >
-            Ask clarification
+            Clarify
           </button>
+          <span style={{ flex: 1 }} />
+          <button
+            className="secondary"
+            onClick={() => handleSend('next', 'I am ready for the next question.')}
+            disabled={loading}
+            style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem', minHeight: '36px' }}
+          >
+            Next
+          </button>
+          <button
+            className="secondary"
+            onClick={handleRequestVariant}
+            disabled={loading}
+            style={{ fontSize: '0.78rem', padding: '0.25rem 0.6rem', minHeight: '36px' }}
+          >
+            + Variant
+          </button>
+          {nextLayer && (
+            <button
+              className="ghost"
+              onClick={handleNextLayer}
+              disabled={loading}
+              style={{ fontSize: '0.78rem', padding: '0.25rem 0.4rem', minHeight: '36px' }}
+            >
+              {nextLayer.label} →
+            </button>
+          )}
         </div>
 
-        {inputMode === 'answer' ? (
-          <>
-            <textarea
-              value={answerInput}
-              onChange={e => setAnswerInput(e.target.value)}
-              placeholder="Paste your working here…"
-              rows={2}
-              disabled={loading}
-              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSend('answer') }}
-              style={{ marginBottom: '0.5rem' }}
-            />
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                className="primary"
-                onClick={() => handleSend('answer')}
-                disabled={loading || !answerInput.trim()}
-                style={{ flex: '1', minWidth: '120px' }}
-              >
-                Submit
-              </button>
-              <button
-                className="secondary"
-                onClick={() => handleSend('next', 'I am ready for the next question.')}
-                disabled={loading}
-                style={{ flex: '1', minWidth: '120px' }}
-              >
-                Next
-              </button>
-              <button
-                className="secondary"
-                onClick={handleRequestVariant}
-                disabled={loading}
-                style={{ flex: '1', minWidth: '100px' }}
-              >
-                + Variant
-              </button>
-              {nextLayer && (
-                <button
-                  className="ghost"
-                  onClick={handleNextLayer}
-                  disabled={loading}
-                  style={{ flex: '1', minWidth: '100px' }}
-                >
-                  {nextLayer.label} →
-                </button>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <textarea
-              value={clarifyInput}
-              onChange={e => setClarifyInput(e.target.value)}
-              placeholder="Ask anything about this topic or question…"
-              rows={2}
-              disabled={loading}
-              onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) handleSend('clarify') }}
-              style={{ marginBottom: '0.5rem' }}
-            />
-            <div className="row">
-              <button className="primary" onClick={() => handleSend('clarify')}
-                disabled={loading || !clarifyInput.trim()}>
-                Ask
-              </button>
-              <span className="spacer" />
-              <span className="muted" style={{ fontSize: '0.75rem' }}>Ctrl+Enter</span>
-            </div>
-          </>
-        )}
+        {/* Textarea + submit in one row */}
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+          <textarea
+            value={inputMode === 'answer' ? answerInput : clarifyInput}
+            onChange={e => inputMode === 'answer'
+              ? setAnswerInput(e.target.value)
+              : setClarifyInput(e.target.value)
+            }
+            placeholder={inputMode === 'answer' ? 'Paste your working…' : 'Ask anything…'}
+            rows={2}
+            disabled={loading}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && e.ctrlKey) handleSend(inputMode === 'answer' ? 'answer' : 'clarify')
+            }}
+            style={{ flex: 1, marginBottom: 0, minHeight: '60px' }}
+          />
+          <button
+            className="primary"
+            onClick={() => handleSend(inputMode === 'answer' ? 'answer' : 'clarify')}
+            disabled={loading || !(inputMode === 'answer' ? answerInput.trim() : clarifyInput.trim())}
+            style={{ minHeight: '60px', padding: '0 1rem', whiteSpace: 'nowrap' }}
+          >
+            {loading ? '…' : 'Send'}
+          </button>
+        </div>
       </div>
     </div>
   )
