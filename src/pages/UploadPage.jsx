@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { uploadPaper } from '../utils/uploadPaper'
+import { extractAndSave } from '../utils/extractQuestions'
 
 const ACCEPTED = '.pdf,image/jpeg,image/jpg,image/png,image/webp'
 const MAX_SIZE_MB = 20
@@ -11,7 +12,7 @@ export default function UploadPage() {
   const navigate = useNavigate()
   const [files, setFiles] = useState([])
   const [uploading, setUploading] = useState(false)
-  const [results, setResults] = useState([]) // { name, status, error }
+  const [results, setResults] = useState([])
   const [dragOver, setDragOver] = useState(false)
 
   function handleFiles(incoming) {
@@ -40,8 +41,11 @@ export default function UploadPage() {
     const outcomes = []
     for (const file of files) {
       try {
-        await uploadPaper(file, user.id)
-        outcomes.push({ name: file.name, status: 'done' })
+        // Step 1: upload file
+        const paper = await uploadPaper(file, user.id)
+        // Step 2: extract questions
+        const count = await extractAndSave(paper)
+        outcomes.push({ name: file.name, status: 'done', count })
       } catch (err) {
         outcomes.push({ name: file.name, status: 'error', error: err.message })
       }
@@ -51,9 +55,7 @@ export default function UploadPage() {
     setUploading(false)
 
     const allDone = outcomes.every(o => o.status === 'done')
-    if (allDone) {
-      setTimeout(() => navigate('/vault'), 1200)
-    }
+    if (allDone) setTimeout(() => navigate('/vault'), 1500)
   }
 
   return (
@@ -63,7 +65,6 @@ export default function UploadPage() {
         Upload past papers or tutorial sheets. PDF and images accepted. Max 20MB per file.
       </p>
 
-      {/* Drop zone */}
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -90,7 +91,6 @@ export default function UploadPage() {
         />
       </div>
 
-      {/* File list */}
       {files.length > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
           {files.map(f => {
@@ -101,8 +101,17 @@ export default function UploadPage() {
                 <span className="muted" style={{ fontSize: '0.8rem', marginRight: '1rem' }}>
                   {(f.size / 1024 / 1024).toFixed(1)} MB
                 </span>
-                {result?.status === 'done' && <span style={{ color: 'var(--success)', fontSize: '0.85rem' }}>Uploaded</span>}
-                {result?.status === 'error' && <span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>Failed</span>}
+                {uploading && !result && (
+                  <span className="muted" style={{ fontSize: '0.85rem' }}>Processing…</span>
+                )}
+                {result?.status === 'done' && (
+                  <span style={{ color: 'var(--success)', fontSize: '0.85rem' }}>
+                    {result.count} questions extracted
+                  </span>
+                )}
+                {result?.status === 'error' && (
+                  <span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>Failed</span>
+                )}
                 {!result && !uploading && (
                   <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => removeFile(f.name)}>
                     Remove
@@ -114,7 +123,6 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Errors */}
       {results.some(r => r.status === 'error') && (
         <div style={{ marginBottom: '1rem' }}>
           {results.filter(r => r.status === 'error').map(r => (
@@ -123,16 +131,15 @@ export default function UploadPage() {
         </div>
       )}
 
-      {/* Actions */}
       <div className="row">
         <button
           className="primary"
           onClick={handleUpload}
           disabled={uploading || files.length === 0}
         >
-          {uploading ? 'Uploading…' : `Upload ${files.length > 0 ? `(${files.length})` : ''}`}
+          {uploading ? 'Extracting questions…' : `Upload ${files.length > 0 ? `(${files.length})` : ''}`}
         </button>
-        <button className="ghost" onClick={() => navigate('/vault')}>
+        <button className="ghost" onClick={() => navigate('/vault')} disabled={uploading}>
           Skip for now
         </button>
       </div>
