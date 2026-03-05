@@ -124,7 +124,14 @@ export default function HomePage() {
             <button
               className="ghost"
               style={{ fontSize: '0.85rem' }}
-              onClick={() => navigate('/vault')}
+              onClick={() => {
+                if (s.sub_type) {
+                  const encoded = encodeURIComponent(`${s.topic}__${s.sub_type}__${s.id}`)
+                  navigate(`/engine/${encoded}`)
+                } else {
+                  navigate('/vault')
+                }
+              }}
             >
               Continue →
             </button>

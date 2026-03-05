@@ -6,8 +6,7 @@ import { getCoverage } from '../utils/getCoverage'
 import { supabase } from '../api/supabase'
 
 export default function VaultPage() {
-  const { user } = useAuth()
-  const { signOut } = useAuth()
+  const { user, signOut } = useAuth()
   const navigate = useNavigate()
   const [vault, setVault] = useState([])
   const [coverage, setCoverage] = useState({})
@@ -44,7 +43,7 @@ export default function VaultPage() {
     try {
       const { data, error } = await supabase
         .from('sessions')
-        .insert({ user_id: user.id, topic, current_layer: 'foundation' })
+        .insert({ user_id: user.id, topic, sub_type, current_layer: 'foundation' })
         .select()
         .single()
       if (error) throw error
