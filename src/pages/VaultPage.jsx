@@ -113,7 +113,7 @@ export default function VaultPage() {
             {expanded[topic] && (
               <div style={{ paddingLeft: '1rem', paddingTop: '0.5rem', paddingBottom: '0.75rem' }}>
                 {subtypes.map(({ sub_type, count }) => {
-                  const key = `${topic}__${sub_type`
+                  const key = `${topic}__${sub_type}`
                   const subCov = cov?.subtypes?.find(s => s.sub_type === sub_type)
                   return (
                     <div key={sub_type} className="row" style={{ padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
