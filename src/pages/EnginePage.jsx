@@ -346,7 +346,7 @@ export default function EnginePage() {
               textTransform: 'uppercase',
               letterSpacing: '0.05em'
             }}>
-              {m.role === 'user' ? 'You' : 'Engine'}
+              {m.role === 'user' ? 'You' : 'Atlas'}
             </p>
             <div
               style={{ lineHeight: '1.7' }}
@@ -362,7 +362,7 @@ export default function EnginePage() {
               marginBottom: '0.35rem',
               textTransform: 'uppercase',
               letterSpacing: '0.05em'
-            }}>Engine</p>
+            }}>Atlas</p>
             <p className="muted">Thinking…</p>
           </div>
         )}

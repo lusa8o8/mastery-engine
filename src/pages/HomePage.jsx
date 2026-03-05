@@ -106,7 +106,7 @@ export default function HomePage() {
         {loading && <p className="muted">Loading…</p>}
 
         {!loading && recentSessions.length === 0 && (
-          <p className="muted">No sessions yet. Start one from your papers.</p>
+          <p className="muted">No sessions yet. Upload a paper and let Atlas guide you through it.</p>
         )}
 
         {recentSessions.map(s => (
