@@ -166,7 +166,7 @@ export default function HomePage() {
               onClick={() => {
                 if (s.sub_type) {
                   const encoded = encodeURIComponent(`${s.topic}__${s.sub_type}__${s.id}`)
-                  navigate(`/engine/${encoded}`)
+                  navigate(`/engine/${encoded}`, { state: { resume: true } })
                 } else {
                   navigate('/vault')
                 }

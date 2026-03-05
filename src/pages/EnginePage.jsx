@@ -134,8 +134,32 @@ export default function EnginePage() {
   useEffect(() => {
     if (!user || initialized) return
     setInitialized(true)
-    loadAndStart()
+    // If session already has a layer beyond foundation, it's a resumed session
+    // Load questions silently without calling Claude
+    const isResume = sessionId && window.history.state?.resume
+    if (isResume) {
+      loadQuestionsOnly()
+    } else {
+      loadAndStart()
+    }
   }, [user])
+
+  async function loadQuestionsOnly() {
+    setLoading(true)
+    setError('')
+    try {
+      const qs = await getQuestionsForSubType(user.id, topic, subType)
+      setQuestions(qs)
+      setMessages([{
+        role: 'assistant',
+        content: `Welcome back. You are in the ${currentLayerLabel} layer.\n\nSubmit your working or ask Atlas a question to continue.`
+      }])
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function loadAndStart() {
     setLoading(true)
