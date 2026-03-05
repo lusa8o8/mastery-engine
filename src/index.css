@@ -45,14 +45,6 @@
 }
 
 :root {
-  --bg: #F5F0E8;
-  --bg-subtle: #EDE8DC;
-  --fg: #1C1917;
-  --fg-muted: #6B6560;
-  --border: #C8BFB0;
-  --border-focus: #1C1917;
-  --error: #8B2020;
-  --success: #2D5A27;
   --radius: 2px;
   --max-width: 680px;
   --font: Georgia, 'Charter', 'Times New Roman', Times, serif;
