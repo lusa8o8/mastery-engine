@@ -268,6 +268,18 @@ export default function EnginePage() {
     }
   }
 
+  async function handleEndSession() {
+    try {
+      await supabase
+        .from('sessions')
+        .update({ current_layer: currentLayer })
+        .eq('id', sessionId)
+    } catch (e) {
+      console.error('Failed to update session:', e)
+    }
+    navigate(`/summary?session=${sessionId}`)
+  }
+
   const visibleMessages = messages.filter(m =>
     !m.content.startsWith('Start the') &&
     !m.content.startsWith('I have completed')
@@ -282,6 +294,14 @@ export default function EnginePage() {
           <p className="muted" style={{ fontSize: '0.85rem' }}>{topic} · {currentLayerLabel} · Solvd</p>
         </div>
         <span className="spacer" />
+        <button
+          className="secondary"
+          style={{ fontSize: '0.85rem' }}
+          onClick={handleEndSession}
+          disabled={loading}
+        >
+          End session
+        </button>
         <button className="ghost" onClick={() => navigate('/vault')}>← Vault</button>
       </div>
 
