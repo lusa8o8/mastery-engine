@@ -82,11 +82,10 @@ export default function HomePage() {
         <span className="spacer" />
         <button
           className="ghost"
-          style={{ fontSize: '1rem', minHeight: 'unset', padding: '0 0.25rem' }}
+          style={{ fontSize: '0.8rem', minHeight: 'unset', padding: '0.25rem 0.5rem', border: '1px solid var(--border)', borderRadius: '2px' }}
           onClick={cycleTheme}
-          title={`Theme: ${theme}`}
         >
-          {THEME_LABELS[theme]}
+          {theme}
         </button>
         <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={handleSignOut}>
           Sign out
