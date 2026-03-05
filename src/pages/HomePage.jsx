@@ -64,6 +64,9 @@ export default function HomePage() {
         </button>
       </div>
 
+      <p className="muted" style={{ marginBottom: '1.5rem', fontSize: '0.95rem' }}>
+        Atlas is ready. Upload your papers and work through every question — one sub-topic at a time.
+      </p>
       <div className="row" style={{ marginBottom: '2.5rem', gap: '0.75rem', flexWrap: 'wrap' }}>
         <button className="primary" onClick={() => navigate('/vault')}>
           Start a session
