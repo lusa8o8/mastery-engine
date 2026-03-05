@@ -5,7 +5,7 @@ import { getQuestionsForSubType } from '../utils/getQuestions'
 import { getSystemPrompt, getUserMessage } from '../utils/enginePrompts'
 import { LAYERS, getNextLayer } from '../utils/constants'
 import { supabase } from '../api/supabase'
-import { logTokens } from '../utils/logTokens'
+import { logTokens, estimateCost } from '../utils/logTokens'
 
 const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
 
@@ -66,7 +66,7 @@ async function askClaude(systemPrompt, messages, userId, sessionId, context) {
     })
   }
 
-  return data.content[0].text
+  return { text: data.content[0].text, usage: data.usage }
 }
 
 async function generateVariant(topic, subType, layer, previousQuestions) {
@@ -121,6 +121,7 @@ export default function EnginePage() {
   const [pendingAnswer, setPendingAnswer] = useState('')
   const [initialized, setInitialized] = useState(false)
   const [variantCount, setVariantCount] = useState(0)
+  const [sessionCost, setSessionCost] = useState(0)
   const bottomRef = useRef(null)
 
   const currentLayerLabel = LAYERS.find(l => l.id === currentLayer)?.label || currentLayer
@@ -144,7 +145,8 @@ export default function EnginePage() {
       setQuestions(qs)
       const systemPrompt = getSystemPrompt(topic, subType, 'foundation', qs)
       const userMsg = getUserMessage('start', 'foundation')
-      const reply = await askClaude(systemPrompt, [{ role: 'user', content: userMsg }], user.id, sessionId, 'foundation_start')
+      const { text: reply, usage } = await askClaude(systemPrompt, [{ role: 'user', content: userMsg }], user.id, sessionId, 'foundation_start')
+      if (usage) setSessionCost(prev => prev + estimateCost(usage.input_tokens, usage.output_tokens))
       setMessages([
         { role: 'user', content: userMsg },
         { role: 'assistant', content: reply }
@@ -179,7 +181,8 @@ export default function EnginePage() {
 
     try {
       const systemPrompt = getSystemPrompt(topic, subType, currentLayer, questions)
-      const reply = await askClaude(systemPrompt, newMessages, user.id, sessionId, 'engine_turn')
+      const { text: reply, usage } = await askClaude(systemPrompt, newMessages, user.id, sessionId, 'engine_turn')
+      if (usage) setSessionCost(prev => prev + estimateCost(usage.input_tokens, usage.output_tokens))
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
 
       if (action !== 'clarify' && action !== 'next') {
@@ -259,7 +262,8 @@ export default function EnginePage() {
 
     try {
       const systemPrompt = getSystemPrompt(topic, subType, newLayer, questions)
-      const reply = await askClaude(systemPrompt, newMessages, user.id, sessionId, 'layer_transition')
+      const { text: reply, usage } = await askClaude(systemPrompt, newMessages, user.id, sessionId, 'layer_transition')
+      if (usage) setSessionCost(prev => prev + estimateCost(usage.input_tokens, usage.output_tokens))
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
     } catch (e) {
       setError(e.message)
@@ -291,7 +295,10 @@ export default function EnginePage() {
       <div className="row" style={{ marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ marginBottom: '0.1rem' }}>{subType}</h1>
-          <p className="muted" style={{ fontSize: '0.85rem' }}>{topic} · {currentLayerLabel} · Solvd</p>
+          <p className="muted" style={{ fontSize: '0.85rem' }}>
+            {topic} · {currentLayerLabel} · Solvd
+            {sessionCost > 0 && <span style={{ marginLeft: '1rem' }}>${sessionCost.toFixed(4)}</span>}
+          </p>
         </div>
         <span className="spacer" />
         <button

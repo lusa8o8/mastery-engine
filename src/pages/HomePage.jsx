@@ -1,0 +1,130 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../api/supabase'
+import { getUserTokens } from '../utils/logTokens'
+
+export default function HomePage() {
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+  const [recentSessions, setRecentSessions] = useState([])
+  const [tokenData, setTokenData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    loadHome()
+  }, [user])
+
+  async function loadHome() {
+    setLoading(true)
+    try {
+      const { data: sessions } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      setRecentSessions(sessions || [])
+
+      const tokens = await getUserTokens(user.id)
+      setTokenData(tokens)
+    } catch (e) {
+      console.error('Home load failed:', e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    navigate('/auth')
+  }
+
+  function formatDate(ts) {
+    return new Date(ts).toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+    })
+  }
+
+  return (
+    <div className="page">
+      <div className="row" style={{ marginBottom: '2.5rem' }}>
+        <h1 style={{ marginBottom: 0 }}>Solvd</h1>
+        <span className="spacer" />
+        <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={handleSignOut}>
+          Sign out
+        </button>
+      </div>
+
+      <div className="row" style={{ marginBottom: '2.5rem', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <button className="primary" onClick={() => navigate('/vault')}>
+          Start a session
+        </button>
+        <button className="secondary" onClick={() => navigate('/upload')}>
+          Upload papers
+        </button>
+        <button className="secondary" onClick={() => navigate('/progress')}>
+          Progress
+        </button>
+      </div>
+
+      <hr className="divider" />
+
+      {tokenData && (
+        <div style={{ marginBottom: '2rem' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Total usage</h2>
+          <div className="row" style={{ gap: '2rem', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontSize: '1.4rem', fontWeight: 'normal', lineHeight: 1 }}>
+                {tokenData.totalTokens.toLocaleString()}
+              </p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Tokens used</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '1.4rem', fontWeight: 'normal', lineHeight: 1 }}>
+                ${tokenData.estimatedCost.toFixed(4)}
+              </p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Estimated cost</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <hr className="divider" />
+
+      <div style={{ marginBottom: '2rem' }}>
+        <h2 style={{ marginBottom: '1rem' }}>Recent sessions</h2>
+
+        {loading && <p className="muted">Loading…</p>}
+
+        {!loading && recentSessions.length === 0 && (
+          <p className="muted">No sessions yet. Start one from your papers.</p>
+        )}
+
+        {recentSessions.map(s => (
+          <div
+            key={s.id}
+            className="row"
+            style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}
+          >
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: '0.95rem', marginBottom: '0.1rem' }}>{s.topic}</p>
+              <p className="muted" style={{ fontSize: '0.8rem' }}>
+                {s.current_layer} · {formatDate(s.created_at)}
+              </p>
+            </div>
+            <button
+              className="ghost"
+              style={{ fontSize: '0.85rem' }}
+              onClick={() => navigate('/vault')}
+            >
+              Continue →
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

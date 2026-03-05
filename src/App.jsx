@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import AuthPage from './pages/AuthPage'
+import HomePage from './pages/HomePage'
 import UploadPage from './pages/UploadPage'
 import VaultPage from './pages/VaultPage'
 import EnginePage from './pages/EnginePage'
@@ -19,6 +20,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/home" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
         <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
         <Route path="/vault" element={<ProtectedRoute><VaultPage /></ProtectedRoute>} />
         <Route path="/engine/:topic" element={<ProtectedRoute><EnginePage /></ProtectedRoute>} />
