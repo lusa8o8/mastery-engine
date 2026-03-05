@@ -396,7 +396,7 @@ export default function EnginePage() {
       )}
 
       {/* Fixed input area */}
-      <div style={{
+      <div className="engine-input-bar" style={{
         position: 'fixed',
         bottom: 0,
         left: '50%',
