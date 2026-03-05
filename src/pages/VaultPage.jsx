@@ -7,6 +7,7 @@ import { supabase } from '../api/supabase'
 
 export default function VaultPage() {
   const { user } = useAuth()
+  const { signOut } = useAuth()
   const navigate = useNavigate()
   const [vault, setVault] = useState([])
   const [coverage, setCoverage] = useState({})
@@ -56,6 +57,11 @@ export default function VaultPage() {
     }
   }
 
+  async function handleSignOut() {
+    await signOut()
+    navigate('/auth')
+  }
+
   if (loading) return <div className="page"><p className="muted">Loading your vault…</p></div>
 
   return (
@@ -65,6 +71,9 @@ export default function VaultPage() {
         <span className="spacer" />
         <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/progress')}>
           Progress
+        </button>
+        <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={handleSignOut}>
+          Sign out
         </button>
         <button className="secondary" onClick={() => navigate('/upload')}>
           Upload more
