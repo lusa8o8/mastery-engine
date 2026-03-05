@@ -13,7 +13,11 @@ export default function HomePage() {
   const [recentSessions, setRecentSessions] = useState([])
   const [tokenData, setTokenData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [theme, setTheme] = useState(() => localStorage.getItem('solvd-theme') || 'paper')
+  const THEMES = ['paper', 'white', 'dark', 'forest']
+
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('solvd-theme') || 'paper'
+  })
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -21,8 +25,11 @@ export default function HomePage() {
   }, [theme])
 
   function cycleTheme() {
-    const idx = THEMES.indexOf(theme)
-    setTheme(THEMES[(idx + 1) % THEMES.length])
+    setTheme(prev => {
+      const idx = THEMES.indexOf(prev)
+      const next = THEMES[(idx + 1) % THEMES.length]
+      return next
+    })
   }
 
   useEffect(() => {
