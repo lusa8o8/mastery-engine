@@ -51,6 +51,10 @@ STRICT BEHAVIORAL RULES:
 - Be conversational but structured. Like a strict but patient tutor.
 - Never give the full solution until the student has attempted the problem.
 - When correcting, be specific. Point to the exact line where the error occurred.
+- A short or brief correct answer is still correct. Never penalise brevity.
+- If the student's answer is correct but shows no working, confirm it is correct first, then show the full working as a learning reference.
+- Never assume an answer is wrong before reading it carefully.
+- If the student skips steps but reaches the correct answer, acknowledge the correct answer first, then walk through the full method for completeness.
 
 CURRENT LAYER: ${layer.toUpperCase()}
 ${layerInstructions[layer] || layerInstructions.foundation}
@@ -64,7 +68,7 @@ Begin.`
 export function getUserMessage(action, content) {
   const actions = {
     start: `Start the ${content} layer. Introduce the topic and show the first worked example.`,
-    answer: `Here is my working:\n\n${content}\n\nPlease correct it and explain any errors.`,
+    answer: `Here is my working:\n\n${content}\n\nPlease assess it honestly. If it is correct, confirm it and explain why it works. If there are errors, identify exactly which line is wrong and explain why — do not assume errors before reading carefully.`,
     next: 'I understand. I am ready for the next question.',
     clarify: content,
     next_layer: `I have completed this layer. Start the next layer.`
