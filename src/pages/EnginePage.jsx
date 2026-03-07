@@ -404,10 +404,11 @@ export default function EnginePage() {
         {visibleMessages.map((m, i) => (
           <div key={i} style={{
             marginBottom: '0',
-            padding: '1.25rem 0',
+            padding: '1.25rem 1rem',
             borderLeft: 'none',
             borderBottom: '1px solid var(--border)',
             background: m.role === 'user' ? 'var(--bg-subtle)' : 'transparent',
+            borderRadius: '2px',
           }}>
             <p style={{
               fontSize: '0.7rem',
