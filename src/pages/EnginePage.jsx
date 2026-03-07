@@ -17,10 +17,149 @@ const ERROR_TYPES = {
   recall_failure: 'Recall Failure'
 }
 
+function renderVennDiagram(jsonStr) {
+  try {
+    const data = JSON.parse(jsonStr)
+    const sets = data.sets || []
+    const shaded = data.shaded || []
+    const universal = data.universal || 'U'
+    const is3Set = sets.length === 3
+    const w = 320, h = 260
+    const cx = w / 2, cy = h / 2
+
+    // Circle centers for 2-set and 3-set
+    const circles = is3Set ? [
+      { x: cx - 45, y: cy - 20, r: 80, label: sets[0] },
+      { x: cx + 45, y: cy - 20, r: 80, label: sets[1] },
+      { x: cx, y: cy + 50, r: 80, label: sets[2] }
+    ] : [
+      { x: cx - 50, y: cy, r: 85, label: sets[0] },
+      { x: cx + 50, y: cy, r: 85, label: sets[1] }
+    ]
+
+    const fg = 'var(--fg)'
+    const shadeFill = 'var(--border-focus)'
+    const shadeOpacity = '0.45'
+    const circleFill = 'transparent'
+    const circleStroke = 'var(--border-focus)'
+
+    // Build clip path defs
+    let defs = '<defs>'
+    circles.forEach((c, i) => {
+      defs += `<clipPath id="cp${i}"><circle cx="${c.x}" cy="${c.y}" r="${c.r}"/></clipPath>`
+    })
+    defs += '</defs>'
+
+    // Helper: shade a region
+    function shadeRegion(regionId) {
+      const inSets = []
+      const outSets = []
+
+      if (is3Set) {
+        const map = {
+          A_only: [0], B_only: [1], C_only: [2],
+          A_intersect_B: [0, 1], A_intersect_C: [0, 2], B_intersect_C: [1, 2],
+          A_intersect_B_intersect_C: [0, 1, 2],
+          outside: []
+        }
+        const ins = map[regionId] || []
+        for (let i = 0; i < 3; i++) ins.includes(i) ? inSets.push(i) : outSets.push(i)
+      } else {
+        const map = {
+          A_only: [0], B_only: [1],
+          A_intersect_B: [0, 1],
+          outside: []
+        }
+        const ins = map[regionId] || []
+        for (let i = 0; i < 2; i++) ins.includes(i) ? inSets.push(i) : outSets.push(i)
+      }
+
+      if (regionId === 'outside') {
+        return `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"/>` +
+          circles.map(c => `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="var(--bg)"/>`).join('')
+      }
+
+      if (inSets.length === 0) return ''
+
+      // Use the first inSet circle as base, clip by remaining inSets, exclude outSets via SVG mask
+      let html = ''
+      if (outSets.length === 0) {
+        // Pure intersection of all inSets
+        let el = `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"`
+        inSets.forEach(i => { el += ` clip-path="url(#cp${i})"` })
+        // Can only apply one clip-path in SVG — use nested g elements instead
+        html = inSets.reduce((inner, i) =>
+          `<g clip-path="url(#cp${i})">${inner}</g>`,
+          `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"/>`
+        )
+      } else {
+        // Intersection minus exclusions — use mask approach
+        const maskId = `mask_${regionId.replace(/\W/g, '_')}`
+        let maskContent = `<rect x="0" y="0" width="${w}" height="${h}" fill="black"/>`
+        maskContent += `<rect x="0" y="0" width="${w}" height="${h}" fill="white" ` +
+          inSets.map(i => `clip-path="url(#cp${i})"`).join(' ') + '/>'
+        // Subtract outSets
+        outSets.forEach(i => {
+          maskContent += `<circle cx="${circles[i].x}" cy="${circles[i].y}" r="${circles[i].r}" fill="black"/>`
+        })
+        defs += `<mask id="${maskId}">${maskContent}</mask>`
+
+        html = inSets.reduce((inner, i) =>
+          `<g clip-path="url(#cp${i})">${inner}</g>`,
+          `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}" mask="url(#${maskId})"/>`
+        )
+      }
+      return html
+    }
+
+    // Build shading layers
+    let shadeLayers = shaded.map(r => shadeRegion(r)).join('')
+
+    // Build circle outlines
+    const circleOutlines = circles.map(c =>
+      `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="${circleFill}" stroke="${circleStroke}" stroke-width="1.5"/>`
+    ).join('')
+
+    // Build labels — position outside each circle
+    const labelOffsets = is3Set ? [
+      { dx: -70, dy: -70 }, { dx: 70, dy: -70 }, { dx: 0, dy: 90 }
+    ] : [
+      { dx: -80, dy: 0 }, { dx: 80, dy: 0 }
+    ]
+    const labels = circles.map((c, i) =>
+      `<text x="${c.x + labelOffsets[i].dx}" y="${c.y + labelOffsets[i].dy}" text-anchor="middle" font-size="13" font-family="Georgia,serif" fill="${fg}" font-weight="bold">${c.label}</text>`
+    ).join('')
+
+    // Universal label
+    const uLabel = `<text x="8" y="18" font-size="11" font-family="Georgia,serif" fill="${fg}" opacity="0.6">${universal}</text>`
+
+    // Rebuild defs with any masks added during shading
+    const finalDefs = defs + '</defs>'
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" style="display:block;margin:1rem auto;border:1px solid var(--border);border-radius:2px;background:var(--bg)">
+      ${finalDefs}
+      <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="2" fill="transparent" stroke="var(--border)" stroke-width="1"/>
+      ${shadeLayers}
+      ${circleOutlines}
+      ${labels}
+      ${uLabel}
+    </svg>`
+
+    return svg
+  } catch (e) {
+    return `<p style="color:var(--error);font-size:0.85rem">Diagram unavailable — ask Atlas to describe the regions instead.</p>`
+  }
+}
+
 function renderMarkdown(text) {
   // Step 1: protect code blocks
   const codeBlocks = []
-  let out = text.replace(/```[\s\S]*?```/g, match => {
+  const vennBlocks = []
+  let out = text.replace(/```venn\n([\s\S]*?)```/g, (match, json) => {
+    vennBlocks.push(json.trim())
+    return `%%VENN_${vennBlocks.length - 1}%%`
+  })
+  out = out.replace(/```[\s\S]*?```/g, match => {
     codeBlocks.push(match)
     return `%%CODE_${codeBlocks.length - 1}%%`
   })
@@ -70,6 +209,10 @@ function renderMarkdown(text) {
     .replace(/\n/g, '<br>')
 
   // Step 5: restore code blocks
+  out = out.replace(/%%VENN_(\d+)%%/g, (_, i) => {
+    return renderVennDiagram(vennBlocks[parseInt(i)])
+  })
+
   out = out.replace(/%%CODE_(\d+)%%/g, (_, i) => {
     const raw = codeBlocks[parseInt(i)]
     const inner = raw.replace(/^```[^\n]*\n?/, '').replace(/```$/, '')
