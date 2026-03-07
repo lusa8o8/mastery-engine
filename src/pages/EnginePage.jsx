@@ -18,45 +18,44 @@ const ERROR_TYPES = {
 }
 
 function renderMarkdown(text) {
-  // Step 1: protect code blocks first (before any other processing)
+  // Step 1: protect code blocks
   const codeBlocks = []
-  let protected_text = text.replace(/```[\s\S]*?```/g, match => {
+  let out = text.replace(/```[\s\S]*?```/g, match => {
     codeBlocks.push(match)
-    return `%%CODEBLOCK_${codeBlocks.length - 1}%%`
+    return `%%CODE_${codeBlocks.length - 1}%%`
   })
 
-  // Step 2: detect and convert markdown tables
-  protected_text = protected_text.replace(
-    /((?:\|.*\|[\r\n]+)+)/g,
-    tableBlock => {
-      const rows = tableBlock.trim().split('\n').filter(r => r.trim())
-      const isSeparator = r => /^\|[\s\-:|]+\|$/.test(r.trim())
-      const parseRow = r =>
-        r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+  // Step 2: escape HTML in non-code, non-table text
+  out = out
+    .replace(/&/g, '&amp;')
+    .replace(/<(?!%%)/g, '&lt;')
+    .replace(/>/g, '&gt;')
 
-      let html = '<table style="border-collapse:collapse;width:100%;margin:1rem 0;font-size:0.9rem">'
-      let isHeader = true
-      for (const row of rows) {
-        if (isSeparator(row)) { isHeader = false; continue }
-        const cells = parseRow(row)
-        const tag = isHeader ? 'th' : 'td'
-        const cellStyle = 'border:1px solid var(--border);padding:0.4rem 0.6rem;text-align:left'
-        html += '<tr>' + cells.map(c => `<${tag} style="${cellStyle}">${c}</${tag}>`).join('') + '</tr>'
-        if (isHeader) isHeader = false
-      }
-      html += '</table>'
-      return html
+  // Step 3: convert markdown tables to HTML
+  out = out.replace(/((?:\|.*\|[ \t]*\n?)+)/g, tableBlock => {
+    const rows = tableBlock.trim().split('\n').filter(r => r.trim())
+    const isSeparator = r => /^\|[\s\-:|]+\|$/.test(r.trim())
+    const parseRow = r =>
+      r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+
+    let html = '<table style="border-collapse:collapse;width:100%;margin:1rem 0;font-size:0.9rem;overflow-x:auto;display:block">'
+    let isHeader = true
+    for (const row of rows) {
+      if (isSeparator(row)) { isHeader = false; continue }
+      const cells = parseRow(row)
+      const tag = isHeader ? 'th' : 'td'
+      const style = isHeader
+        ? 'border:1px solid var(--border);padding:0.4rem 0.6rem;text-align:left;background:var(--bg-subtle)'
+        : 'border:1px solid var(--border);padding:0.4rem 0.6rem;text-align:left'
+      html += '<tr>' + cells.map(c => `<${tag} style="${style}">${c}</${tag}>`).join('') + '</tr>'
+      isHeader = false
     }
-  )
+    html += '</table>'
+    return html
+  })
 
-  // Step 3: escape HTML (but not in already-converted table HTML)
-  // Only escape in non-table portions
-  protected_text = protected_text
-    .replace(/&(?!amp;|lt;|gt;)/g, '&amp;')
-    .replace(/(?<!<[^>]*)(?<!&lt;)(?<!&gt;)<(?![^<>]*style)/g, match => '&lt;')
-
-  // Step 4: standard markdown replacements
-  protected_text = protected_text
+  // Step 4: standard markdown
+  out = out
     .replace(/\$\$(.+?)\$\$/gs, '<em style="font-style:italic;font-family:Georgia,serif">$1</em>')
     .replace(/\$(.+?)\$/g, '<em style="font-style:italic;font-family:Georgia,serif">$1</em>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
@@ -70,14 +69,14 @@ function renderMarkdown(text) {
     .replace(/\n\n/g, '<br><br>')
     .replace(/\n/g, '<br>')
 
-  // Step 5: restore code blocks as styled pre elements
-  protected_text = protected_text.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => {
+  // Step 5: restore code blocks
+  out = out.replace(/%%CODE_(\d+)%%/g, (_, i) => {
     const raw = codeBlocks[parseInt(i)]
     const inner = raw.replace(/^```[^\n]*\n?/, '').replace(/```$/, '')
     return `<pre style="font-family:monospace;font-size:0.85rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:2px;padding:0.75rem;overflow-x:auto;white-space:pre;margin:0.75rem 0">${inner}</pre>`
   })
 
-  return protected_text
+  return out
 }
 
 async function askClaude(systemPrompt, messages, userId, sessionId, context) {
