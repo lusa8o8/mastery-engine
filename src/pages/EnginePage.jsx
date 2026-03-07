@@ -138,7 +138,7 @@ function renderVennDiagram(jsonStr) {
 
   } catch (e) {
     console.error('Venn error:', e, jsonStr)
-    return `<p style="color:var(--error);font-size:0.85rem">Diagram unavailable (${e.message})</p>`
+    return `< p style = "color:var(--error);font-size:0.85rem" > Diagram unavailable(${e.message})</p > `
   }
 }
 
@@ -146,13 +146,13 @@ function renderMarkdown(text) {
   // Step 1: protect code blocks
   const codeBlocks = []
   const vennBlocks = []
-  let out = text.replace(/```venn\n([\s\S]*?)```/g, (match, json) => {
+  let out = text.replace(/```venn\n([\s\S] *?)```/g, (match, json) => {
     vennBlocks.push(json.trim())
-    return `%%VENN_${vennBlocks.length - 1}%%`
+    return `%% VENN_${vennBlocks.length - 1}%% `
   })
-  out = out.replace(/```[\s\S]*?```/g, match => {
+  out = out.replace(/```[\s\S]*? ```/g, match => {
     codeBlocks.push(match)
-    return `%%CODE_${codeBlocks.length - 1}%%`
+    return `%% CODE_${codeBlocks.length - 1}%% `
   })
 
   // Step 2: escape HTML in non-code, non-table text
@@ -177,7 +177,7 @@ function renderMarkdown(text) {
       const style = isHeader
         ? 'border:1px solid var(--border);padding:0.4rem 0.6rem;text-align:left;background:var(--bg-subtle)'
         : 'border:1px solid var(--border);padding:0.4rem 0.6rem;text-align:left'
-      html += '<tr>' + cells.map(c => `<${tag} style="${style}">${c}</${tag}>`).join('') + '</tr>'
+      html += '<tr>' + cells.map(c => `< ${tag} style = "${style}" > ${c}</${tag}> `).join('') + '</tr>'
       isHeader = false
     }
     html += '</table>'
@@ -206,8 +206,8 @@ function renderMarkdown(text) {
 
   out = out.replace(/%%CODE_(\d+)%%/g, (_, i) => {
     const raw = codeBlocks[parseInt(i)]
-    const inner = raw.replace(/^```[^\n]*\n?/, '').replace(/```$/, '')
-    return `<pre style="font-family:monospace;font-size:0.85rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:2px;padding:0.75rem;overflow-x:auto;white-space:pre;margin:0.75rem 0">${inner}</pre>`
+    const inner = raw.replace(/^```[^\n]*\n ? /, '').replace(/```$/, '')
+    return `< pre style = "font-family:monospace;font-size:0.85rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:2px;padding:0.75rem;overflow-x:auto;white-space:pre;margin:0.75rem 0" > ${inner}</pre > `
   })
 
   return out
@@ -252,12 +252,12 @@ async function generateVariant(topic, subType, layer, previousQuestions) {
 Study these real exam questions carefully:
 ${questionList}
 
-Generate ONE new exam-style question that:
-- Matches the difficulty and style of the questions above
-- Tests the same concept but with different numbers or framing
-- For layer "${layer}": ${layer === 'traps' ? 'includes an examiner trick or trap' : layer === 'pressure' ? 'combines multiple concepts under time pressure' : 'is a clean direct application'}
+Generate ONE new exam - style question that:
+    - Matches the difficulty and style of the questions above
+      - Tests the same concept but with different numbers or framing
+        - For layer "${layer}": ${layer === 'traps' ? 'includes an examiner trick or trap' : layer === 'pressure' ? 'combines multiple concepts under time pressure' : 'is a clean direct application'}
 
-Return ONLY the question text. No explanation. No preamble.`
+Return ONLY the question text.No explanation.No preamble.`
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -329,7 +329,7 @@ export default function EnginePage() {
       setQuestions(qs)
       setMessages([{
         role: 'assistant',
-        content: `Welcome back. You are in the ${currentLayerLabel} layer.\n\nSubmit your working or ask Atlas a question to continue.`
+        content: `Welcome back.You are in the ${currentLayerLabel} layer.\n\nSubmit your working or ask Atlas a question to continue.`
       }])
     } catch (e) {
       setError(e.message)
@@ -367,7 +367,7 @@ export default function EnginePage() {
     setShowErrorClassifier(false)
 
     const userContent = action === 'clarify'
-      ? `[Clarification request] ${text}`
+      ? `[Clarification request] ${text} `
       : getUserMessage(action || 'answer', text)
 
     const newMessages = [...messages, { role: 'user', content: userContent }]
@@ -404,7 +404,7 @@ export default function EnginePage() {
       const variantText = await generateVariant(topic, subType, currentLayer, questions)
       setVariantCount(v => v + 1)
       const variantQuestion = {
-        id: `variant_${variantCount}`,
+        id: `variant_${variantCount} `,
         raw_text: variantText,
         topic,
         sub_type: subType,
@@ -413,7 +413,7 @@ export default function EnginePage() {
       }
       setQuestions(prev => [...prev, variantQuestion])
 
-      const announcement = `[AI Variant #${variantCount + 1}]\n\n${variantText}`
+      const announcement = `[AI Variant #${variantCount + 1}]\n\n${variantText} `
       const newMessages = [...messages, { role: 'assistant', content: announcement }]
       setMessages(newMessages)
     } catch (e) {
@@ -441,7 +441,7 @@ export default function EnginePage() {
 
   async function handleNextLayer() {
     if (!nextLayer) {
-      navigate(`/summary?session=${sessionId}`)
+      navigate(`/ summary ? session = ${sessionId} `)
       return
     }
     setLoading(true)
@@ -484,7 +484,7 @@ export default function EnginePage() {
     } catch (e) {
       console.error('Failed to update session:', e)
     }
-    navigate(`/summary?session=${sessionId}`)
+    navigate(`/ summary ? session = ${sessionId} `)
   }
 
   const visibleMessages = messages.filter(m =>
