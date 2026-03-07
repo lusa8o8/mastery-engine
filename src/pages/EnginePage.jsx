@@ -431,7 +431,20 @@ export default function EnginePage() {
   }
 
   const visibleMessages = messages.filter(function (m) {
-    return !m.content.startsWith('Start the') && !m.content.startsWith('I have completed')
+    return !m.content.startsWith('Start the') &&
+      !m.content.startsWith('I have completed') &&
+      !m.content.startsWith('I understand. I am ready') &&
+      !m.content.startsWith('[Clarification request]')
+  }).map(function (m) {
+    if (m.role === 'user') {
+      return Object.assign({}, m, {
+        content: m.content
+          .replace(/\n\nPlease assess it honestly[\s\S]*$/, '')
+          .replace(/^Here is my working:\n\n/, '')
+          .trim()
+      })
+    }
+    return m
   })
 
   return (
