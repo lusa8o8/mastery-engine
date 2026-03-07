@@ -403,15 +403,19 @@ export default function EnginePage() {
       <div style={{ marginBottom: '1.5rem' }}>
         {visibleMessages.map((m, i) => (
           <div key={i} style={{
-            marginBottom: '1.5rem',
-            paddingLeft: m.role === 'user' ? '1.5rem' : '0',
-            borderLeft: m.role === 'user' ? '2px solid var(--border)' : 'none'
+            marginBottom: '0',
+            padding: m.role === 'user' ? '1rem 1rem 1rem 1.25rem' : '1.25rem 0',
+            borderLeft: m.role === 'user' ? '3px solid var(--border-focus)' : 'none',
+            borderBottom: '1px solid var(--border)',
+            background: m.role === 'user' ? 'var(--bg-subtle)' : 'transparent',
           }}>
-            <p className="muted" style={{
-              fontSize: '0.75rem',
-              marginBottom: '0.35rem',
+            <p style={{
+              fontSize: '0.7rem',
+              marginBottom: '0.5rem',
               textTransform: 'uppercase',
-              letterSpacing: '0.05em'
+              letterSpacing: '0.08em',
+              color: m.role === 'user' ? 'var(--fg-muted)' : 'var(--fg)',
+              fontWeight: m.role === 'assistant' ? 'bold' : 'normal'
             }}>
               {m.role === 'user' ? 'You' : 'Atlas'}
             </p>
