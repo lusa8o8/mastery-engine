@@ -7,7 +7,6 @@ export async function getQuestionsForSubType(userId, topic, subType) {
     .eq('user_id', userId)
     .eq('topic', topic)
     .eq('sub_type', subType)
-
   if (error) throw error
-  return data
+  return data || []
 }
