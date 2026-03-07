@@ -1,5 +1,6 @@
 export function getSystemPrompt(topic, subType, layer, vaultQuestions) {
-  const questionList = vaultQuestions
+  const safeQuestions = Array.isArray(vaultQuestions) ? vaultQuestions : []
+  const questionList = safeQuestions
     .map((q, i) => `${i + 1}. ${q.raw_text}`)
     .join('\n')
 
