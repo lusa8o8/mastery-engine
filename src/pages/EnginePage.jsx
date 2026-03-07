@@ -404,8 +404,8 @@ export default function EnginePage() {
         {visibleMessages.map((m, i) => (
           <div key={i} style={{
             marginBottom: '0',
-            padding: m.role === 'user' ? '1rem 1rem 1rem 1.25rem' : '1.25rem 0',
-            borderLeft: m.role === 'user' ? '3px solid var(--border-focus)' : 'none',
+            padding: '1.25rem 0',
+            borderLeft: 'none',
             borderBottom: '1px solid var(--border)',
             background: m.role === 'user' ? 'var(--bg-subtle)' : 'transparent',
           }}>
