@@ -17,6 +17,62 @@ const ERROR_TYPES = {
   recall_failure: 'Recall Failure'
 }
 
+const shadeRegion = (regionId, circles, is3Set, w, h, shadeFill, shadeOpacity, defs) => {
+  const inSets = []
+  const outSets = []
+  const count = is3Set ? 3 : 2
+
+  const map3 = {
+    A_only: [0], B_only: [1], C_only: [2],
+    A_intersect_B: [0, 1], A_intersect_C: [0, 2], B_intersect_C: [1, 2],
+    A_intersect_B_intersect_C: [0, 1, 2],
+    outside: []
+  }
+  const map2 = {
+    A_only: [0], B_only: [1],
+    A_intersect_B: [0, 1],
+    outside: []
+  }
+  const map = is3Set ? map3 : map2
+  const ins = map[regionId] || []
+  for (let i = 0; i < count; i++) {
+    ins.includes(i) ? inSets.push(i) : outSets.push(i)
+  }
+
+  if (regionId === 'outside') {
+    return {
+      html: `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"/>` +
+        circles.map(c => `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="var(--bg)"/>`).join(''),
+      extraDefs: ''
+    }
+  }
+
+  if (inSets.length === 0) return { html: '', extraDefs: '' }
+
+  if (outSets.length === 0) {
+    const html = inSets.reduce(
+      (inner, i) => `<g clip-path="url(#cp${i})">${inner}</g>`,
+      `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"/>`
+    )
+    return { html, extraDefs: '' }
+  }
+
+  const maskId = `mask_${regionId.replace(/\W/g, '_')}`
+  let maskContent = `<rect x="0" y="0" width="${w}" height="${h}" fill="black"/>`
+  maskContent += `<rect x="0" y="0" width="${w}" height="${h}" fill="white" ` +
+    inSets.map(i => `clip-path="url(#cp${i})"`).join(' ') + '/>'
+  outSets.forEach(i => {
+    maskContent += `<circle cx="${circles[i].x}" cy="${circles[i].y}" r="${circles[i].r}" fill="black"/>`
+  })
+  const extraDefs = `<mask id="${maskId}">${maskContent}</mask>`
+
+  const html = inSets.reduce(
+    (inner, i) => `<g clip-path="url(#cp${i})">${inner}</g>`,
+    `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}" mask="url(#${maskId})"/>`
+  )
+  return { html, extraDefs }
+}
+
 function renderVennDiagram(jsonStr) {
   try {
     const data = JSON.parse(jsonStr)
@@ -27,7 +83,6 @@ function renderVennDiagram(jsonStr) {
     const w = 320, h = 260
     const cx = w / 2, cy = h / 2
 
-    // Circle centers for 2-set and 3-set
     const circles = is3Set ? [
       { x: cx - 45, y: cy - 20, r: 80, label: sets[0] },
       { x: cx + 45, y: cy - 20, r: 80, label: sets[1] },
@@ -40,86 +95,27 @@ function renderVennDiagram(jsonStr) {
     const fg = 'var(--fg)'
     const shadeFill = 'var(--border-focus)'
     const shadeOpacity = '0.45'
-    const circleFill = 'transparent'
     const circleStroke = 'var(--border-focus)'
 
-    // Build clip path defs
-    let defs = ''
+    let clipPaths = ''
     circles.forEach((c, i) => {
-      defs += `<clipPath id="cp${i}"><circle cx="${c.x}" cy="${c.y}" r="${c.r}"/></clipPath>`
+      clipPaths += `<clipPath id="cp${i}"><circle cx="${c.x}" cy="${c.y}" r="${c.r}"/></clipPath>`
     })
 
-    // Helper: shade a region
-    function shadeRegion(regionId) {
-      const inSets = []
-      const outSets = []
+    let extraDefs = ''
+    let shadeLayers = ''
+    shaded.forEach(regionId => {
+      const result = shadeRegion(regionId, circles, is3Set, w, h, shadeFill, shadeOpacity, extraDefs)
+      extraDefs += result.extraDefs
+      shadeLayers += result.html
+    })
 
-      if (is3Set) {
-        const map = {
-          A_only: [0], B_only: [1], C_only: [2],
-          A_intersect_B: [0, 1], A_intersect_C: [0, 2], B_intersect_C: [1, 2],
-          A_intersect_B_intersect_C: [0, 1, 2],
-          outside: []
-        }
-        const ins = map[regionId] || []
-        for (let i = 0; i < 3; i++) ins.includes(i) ? inSets.push(i) : outSets.push(i)
-      } else {
-        const map = {
-          A_only: [0], B_only: [1],
-          A_intersect_B: [0, 1],
-          outside: []
-        }
-        const ins = map[regionId] || []
-        for (let i = 0; i < 2; i++) ins.includes(i) ? inSets.push(i) : outSets.push(i)
-      }
+    const finalDefs = `<defs>${clipPaths}${extraDefs}</defs>`
 
-      if (regionId === 'outside') {
-        return `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"/>` +
-          circles.map(c => `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="var(--bg)"/>`).join('')
-      }
-
-      if (inSets.length === 0) return ''
-
-      // Use the first inSet circle as base, clip by remaining inSets, exclude outSets via SVG mask
-      let html = ''
-      if (outSets.length === 0) {
-        // Pure intersection of all inSets
-        let el = `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"`
-        inSets.forEach(i => { el += ` clip-path="url(#cp${i})"` })
-        // Can only apply one clip-path in SVG — use nested g elements instead
-        html = inSets.reduce((inner, i) =>
-          `<g clip-path="url(#cp${i})">${inner}</g>`,
-          `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"/>`
-        )
-      } else {
-        // Intersection minus exclusions — use mask approach
-        const maskId = `mask_${regionId.replace(/\W/g, '_')}`
-        let maskContent = `<rect x="0" y="0" width="${w}" height="${h}" fill="black"/>`
-        maskContent += `<rect x="0" y="0" width="${w}" height="${h}" fill="white" ` +
-          inSets.map(i => `clip-path="url(#cp${i})"`).join(' ') + '/>'
-        // Subtract outSets
-        outSets.forEach(i => {
-          maskContent += `<circle cx="${circles[i].x}" cy="${circles[i].y}" r="${circles[i].r}" fill="black"/>`
-        })
-        defs += `<mask id="${maskId}">${maskContent}</mask>`
-
-        html = inSets.reduce((inner, i) =>
-          `<g clip-path="url(#cp${i})">${inner}</g>`,
-          `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}" mask="url(#${maskId})"/>`
-        )
-      }
-      return html
-    }
-
-    // Build shading layers
-    let shadeLayers = shaded.map(r => shadeRegion(r)).join('')
-
-    // Build circle outlines
     const circleOutlines = circles.map(c =>
-      `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="${circleFill}" stroke="${circleStroke}" stroke-width="1.5"/>`
+      `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="transparent" stroke="${circleStroke}" stroke-width="1.5"/>`
     ).join('')
 
-    // Build labels — position outside each circle
     const labelOffsets = is3Set ? [
       { dx: -70, dy: -70 }, { dx: 70, dy: -70 }, { dx: 0, dy: 90 }
     ] : [
@@ -129,13 +125,9 @@ function renderVennDiagram(jsonStr) {
       `<text x="${c.x + labelOffsets[i].dx}" y="${c.y + labelOffsets[i].dy}" text-anchor="middle" font-size="13" font-family="Georgia,serif" fill="${fg}" font-weight="bold">${c.label}</text>`
     ).join('')
 
-    // Universal label
     const uLabel = `<text x="8" y="18" font-size="11" font-family="Georgia,serif" fill="${fg}" opacity="0.6">${universal}</text>`
 
-    // Rebuild defs with any masks added during shading
-    const finalDefs = '<defs>' + defs + '</defs>'
-
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" style="display:block;margin:1rem auto;border:1px solid var(--border);border-radius:2px;background:var(--bg)">
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" style="display:block;margin:1rem auto;border:1px solid var(--border);border-radius:2px;background:var(--bg)">
       ${finalDefs}
       <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="2" fill="transparent" stroke="var(--border)" stroke-width="1"/>
       ${shadeLayers}
@@ -144,10 +136,9 @@ function renderVennDiagram(jsonStr) {
       ${uLabel}
     </svg>`
 
-    return svg
   } catch (e) {
     console.error('Venn error:', e, jsonStr)
-    return `<p style="color:var(--error);font-size:0.85rem">Diagram unavailable (${e.message}) — ask Atlas to describe the regions instead.</p>`
+    return `<p style="color:var(--error);font-size:0.85rem">Diagram unavailable (${e.message})</p>`
   }
 }
 
