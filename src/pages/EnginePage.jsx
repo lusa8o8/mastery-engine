@@ -20,8 +20,8 @@ const ERROR_TYPES = {
 function renderVennDiagram(jsonStr) {
   try {
     const data = JSON.parse(jsonStr)
-    const sets = data.sets || []
-    const shaded = data.shaded || []
+    const sets = Array.isArray(data.sets) ? data.sets : []
+    const shaded = Array.isArray(data.shaded) ? data.shaded : []
     const universal = data.universal || 'U'
     const is3Set = sets.length === 3
     const w = 320, h = 260
@@ -44,11 +44,10 @@ function renderVennDiagram(jsonStr) {
     const circleStroke = 'var(--border-focus)'
 
     // Build clip path defs
-    let defs = '<defs>'
+    let defs = ''
     circles.forEach((c, i) => {
       defs += `<clipPath id="cp${i}"><circle cx="${c.x}" cy="${c.y}" r="${c.r}"/></clipPath>`
     })
-    defs += '</defs>'
 
     // Helper: shade a region
     function shadeRegion(regionId) {
@@ -134,7 +133,7 @@ function renderVennDiagram(jsonStr) {
     const uLabel = `<text x="8" y="18" font-size="11" font-family="Georgia,serif" fill="${fg}" opacity="0.6">${universal}</text>`
 
     // Rebuild defs with any masks added during shading
-    const finalDefs = defs + '</defs>'
+    const finalDefs = '<defs>' + defs + '</defs>'
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" style="display:block;margin:1rem auto;border:1px solid var(--border);border-radius:2px;background:var(--bg)">
       ${finalDefs}
@@ -147,7 +146,8 @@ function renderVennDiagram(jsonStr) {
 
     return svg
   } catch (e) {
-    return `<p style="color:var(--error);font-size:0.85rem">Diagram unavailable — ask Atlas to describe the regions instead.</p>`
+    console.error('Venn error:', e, jsonStr)
+    return `<p style="color:var(--error);font-size:0.85rem">Diagram unavailable (${e.message}) — ask Atlas to describe the regions instead.</p>`
   }
 }
 
