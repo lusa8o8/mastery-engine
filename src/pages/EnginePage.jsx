@@ -73,13 +73,13 @@ function renderVennDiagram(jsonStr) {
     const universal = data.universal || 'U'
     const is3Set = sets.length === 3
     const w = 320
-    const h = 260
+    const h = is3Set ? 320 : 240
     const cx = w / 2
-    const cy = h / 2
+    const cy = is3Set ? 130 : h / 2
     const circles = is3Set ? [
-      { x: cx - 45, y: cy - 20, r: 80, label: sets[0] },
-      { x: cx + 45, y: cy - 20, r: 80, label: sets[1] },
-      { x: cx, y: cy + 50, r: 80, label: sets[2] }
+      { x: cx - 45, y: cy - 30, r: 75, label: sets[0] },
+      { x: cx + 45, y: cy - 30, r: 75, label: sets[1] },
+      { x: cx, y: cy + 55, r: 75, label: sets[2] }
     ] : [
       { x: cx - 50, y: cy, r: 85, label: sets[0] },
       { x: cx + 50, y: cy, r: 85, label: sets[1] }
@@ -104,7 +104,7 @@ function renderVennDiagram(jsonStr) {
       return '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + c.r + '" fill="transparent" stroke="' + circleStroke + '" stroke-width="1.5"/>'
     }).join('')
     const labelOffsets = is3Set
-      ? [{ dx: -70, dy: -70 }, { dx: 70, dy: -70 }, { dx: 0, dy: 90 }]
+      ? [{ dx: -75, dy: -65 }, { dx: 75, dy: -65 }, { dx: 0, dy: 95 }]
       : [{ dx: -80, dy: 0 }, { dx: 80, dy: 0 }]
     const labels = circles.map(function (c, i) {
       return '<text x="' + (c.x + labelOffsets[i].dx) + '" y="' + (c.y + labelOffsets[i].dy) + '" text-anchor="middle" font-size="13" font-family="Georgia,serif" fill="' + fg + '" font-weight="bold">' + c.label + '</text>'
