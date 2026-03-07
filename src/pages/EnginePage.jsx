@@ -17,142 +17,12 @@ const ERROR_TYPES = {
   recall_failure: 'Recall Failure'
 }
 
-const shadeRegion = (regionId, circles, is3Set, w, h, shadeFill, shadeOpacity, defs) => {
-  const inSets = []
-  const outSets = []
-  const count = is3Set ? 3 : 2
-
-  const map3 = {
-    A_only: [0], B_only: [1], C_only: [2],
-    A_intersect_B: [0, 1], A_intersect_C: [0, 2], B_intersect_C: [1, 2],
-    A_intersect_B_intersect_C: [0, 1, 2],
-    outside: []
-  }
-  const map2 = {
-    A_only: [0], B_only: [1],
-    A_intersect_B: [0, 1],
-    outside: []
-  }
-  const map = is3Set ? map3 : map2
-  const ins = map[regionId] || []
-  for (let i = 0; i < count; i++) {
-    ins.includes(i) ? inSets.push(i) : outSets.push(i)
-  }
-
-  if (regionId === 'outside') {
-    return {
-      html: `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"/>` +
-        circles.map(c => `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="var(--bg)"/>`).join(''),
-      extraDefs: ''
-    }
-  }
-
-  if (inSets.length === 0) return { html: '', extraDefs: '' }
-
-  if (outSets.length === 0) {
-    const html = inSets.reduce(
-      (inner, i) => `<g clip-path="url(#cp${i})">${inner}</g>`,
-      `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}"/>`
-    )
-    return { html, extraDefs: '' }
-  }
-
-  const maskId = `mask_${regionId.replace(/\W/g, '_')}`
-  let maskContent = `<rect x="0" y="0" width="${w}" height="${h}" fill="black"/>`
-  maskContent += `<rect x="0" y="0" width="${w}" height="${h}" fill="white" ` +
-    inSets.map(i => `clip-path="url(#cp${i})"`).join(' ') + '/>'
-  outSets.forEach(i => {
-    maskContent += `<circle cx="${circles[i].x}" cy="${circles[i].y}" r="${circles[i].r}" fill="black"/>`
-  })
-  const extraDefs = `<mask id="${maskId}">${maskContent}</mask>`
-
-  const html = inSets.reduce(
-    (inner, i) => `<g clip-path="url(#cp${i})">${inner}</g>`,
-    `<rect x="0" y="0" width="${w}" height="${h}" fill="${shadeFill}" opacity="${shadeOpacity}" mask="url(#${maskId})"/>`
-  )
-  return { html, extraDefs }
-}
-
-function renderVennDiagram(jsonStr) {
-  try {
-    const data = JSON.parse(jsonStr)
-    const sets = Array.isArray(data.sets) ? data.sets : []
-    const shaded = Array.isArray(data.shaded) ? data.shaded : []
-    const universal = data.universal || 'U'
-    const is3Set = sets.length === 3
-    const w = 320, h = 260
-    const cx = w / 2, cy = h / 2
-
-    const circles = is3Set ? [
-      { x: cx - 45, y: cy - 20, r: 80, label: sets[0] },
-      { x: cx + 45, y: cy - 20, r: 80, label: sets[1] },
-      { x: cx, y: cy + 50, r: 80, label: sets[2] }
-    ] : [
-      { x: cx - 50, y: cy, r: 85, label: sets[0] },
-      { x: cx + 50, y: cy, r: 85, label: sets[1] }
-    ]
-
-    const fg = 'var(--fg)'
-    const shadeFill = 'var(--border-focus)'
-    const shadeOpacity = '0.45'
-    const circleStroke = 'var(--border-focus)'
-
-    let clipPaths = ''
-    circles.forEach((c, i) => {
-      clipPaths += `<clipPath id="cp${i}"><circle cx="${c.x}" cy="${c.y}" r="${c.r}"/></clipPath>`
-    })
-
-    let extraDefs = ''
-    let shadeLayers = ''
-    shaded.forEach(regionId => {
-      const result = shadeRegion(regionId, circles, is3Set, w, h, shadeFill, shadeOpacity, extraDefs)
-      extraDefs += result.extraDefs
-      shadeLayers += result.html
-    })
-
-    const finalDefs = `<defs>${clipPaths}${extraDefs}</defs>`
-
-    const circleOutlines = circles.map(c =>
-      `<circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="transparent" stroke="${circleStroke}" stroke-width="1.5"/>`
-    ).join('')
-
-    const labelOffsets = is3Set ? [
-      { dx: -70, dy: -70 }, { dx: 70, dy: -70 }, { dx: 0, dy: 90 }
-    ] : [
-      { dx: -80, dy: 0 }, { dx: 80, dy: 0 }
-    ]
-    const labels = circles.map((c, i) =>
-      `<text x="${c.x + labelOffsets[i].dx}" y="${c.y + labelOffsets[i].dy}" text-anchor="middle" font-size="13" font-family="Georgia,serif" fill="${fg}" font-weight="bold">${c.label}</text>`
-    ).join('')
-
-    const uLabel = `<text x="8" y="18" font-size="11" font-family="Georgia,serif" fill="${fg}" opacity="0.6">${universal}</text>`
-
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" style="display:block;margin:1rem auto;border:1px solid var(--border);border-radius:2px;background:var(--bg)">
-      ${finalDefs}
-      <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="2" fill="transparent" stroke="var(--border)" stroke-width="1"/>
-      ${shadeLayers}
-      ${circleOutlines}
-      ${labels}
-      ${uLabel}
-    </svg>`
-
-  } catch (e) {
-    console.error('Venn error:', e, jsonStr)
-    return `< p style = "color:var(--error);font-size:0.85rem" > Diagram unavailable(${e.message})</p > `
-  }
-}
-
 function renderMarkdown(text) {
   // Step 1: protect code blocks
   const codeBlocks = []
-  const vennBlocks = []
-  let out = text.replace(/```venn\n([\s\S] *?)```/g, (match, json) => {
-    vennBlocks.push(json.trim())
-    return `%% VENN_${vennBlocks.length - 1}%% `
-  })
-  out = out.replace(/```[\s\S]*? ```/g, match => {
+  let out = text.replace(/```[\s\S]*?```/g, match => {
     codeBlocks.push(match)
-    return `%% CODE_${codeBlocks.length - 1}%% `
+    return `%%CODE_${codeBlocks.length - 1}%%`
   })
 
   // Step 2: escape HTML in non-code, non-table text
@@ -177,7 +47,7 @@ function renderMarkdown(text) {
       const style = isHeader
         ? 'border:1px solid var(--border);padding:0.4rem 0.6rem;text-align:left;background:var(--bg-subtle)'
         : 'border:1px solid var(--border);padding:0.4rem 0.6rem;text-align:left'
-      html += '<tr>' + cells.map(c => `< ${tag} style = "${style}" > ${c}</${tag}> `).join('') + '</tr>'
+      html += '<tr>' + cells.map(c => `<${tag} style="${style}">${c}</${tag}>`).join('') + '</tr>'
       isHeader = false
     }
     html += '</table>'
@@ -200,14 +70,10 @@ function renderMarkdown(text) {
     .replace(/\n/g, '<br>')
 
   // Step 5: restore code blocks
-  out = out.replace(/%%VENN_(\d+)%%/g, (_, i) => {
-    return renderVennDiagram(vennBlocks[parseInt(i)])
-  })
-
   out = out.replace(/%%CODE_(\d+)%%/g, (_, i) => {
     const raw = codeBlocks[parseInt(i)]
-    const inner = raw.replace(/^```[^\n]*\n ? /, '').replace(/```$/, '')
-    return `< pre style = "font-family:monospace;font-size:0.85rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:2px;padding:0.75rem;overflow-x:auto;white-space:pre;margin:0.75rem 0" > ${inner}</pre > `
+    const inner = raw.replace(/^```[^\n]*\n?/, '').replace(/```$/, '')
+    return `<pre style="font-family:monospace;font-size:0.85rem;background:var(--bg-subtle);border:1px solid var(--border);border-radius:2px;padding:0.75rem;overflow-x:auto;white-space:pre;margin:0.75rem 0">${inner}</pre>`
   })
 
   return out
@@ -252,12 +118,12 @@ async function generateVariant(topic, subType, layer, previousQuestions) {
 Study these real exam questions carefully:
 ${questionList}
 
-Generate ONE new exam - style question that:
-    - Matches the difficulty and style of the questions above
-      - Tests the same concept but with different numbers or framing
-        - For layer "${layer}": ${layer === 'traps' ? 'includes an examiner trick or trap' : layer === 'pressure' ? 'combines multiple concepts under time pressure' : 'is a clean direct application'}
+Generate ONE new exam-style question that:
+- Matches the difficulty and style of the questions above
+- Tests the same concept but with different numbers or framing
+- For layer "${layer}": ${layer === 'traps' ? 'includes an examiner trick or trap' : layer === 'pressure' ? 'combines multiple concepts under time pressure' : 'is a clean direct application'}
 
-Return ONLY the question text.No explanation.No preamble.`
+Return ONLY the question text. No explanation. No preamble.`
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -329,7 +195,7 @@ export default function EnginePage() {
       setQuestions(qs)
       setMessages([{
         role: 'assistant',
-        content: `Welcome back.You are in the ${currentLayerLabel} layer.\n\nSubmit your working or ask Atlas a question to continue.`
+        content: `Welcome back. You are in the ${currentLayerLabel} layer.\n\nSubmit your working or ask Atlas a question to continue.`
       }])
     } catch (e) {
       setError(e.message)
@@ -367,7 +233,7 @@ export default function EnginePage() {
     setShowErrorClassifier(false)
 
     const userContent = action === 'clarify'
-      ? `[Clarification request] ${text} `
+      ? `[Clarification request] ${text}`
       : getUserMessage(action || 'answer', text)
 
     const newMessages = [...messages, { role: 'user', content: userContent }]
@@ -404,7 +270,7 @@ export default function EnginePage() {
       const variantText = await generateVariant(topic, subType, currentLayer, questions)
       setVariantCount(v => v + 1)
       const variantQuestion = {
-        id: `variant_${variantCount} `,
+        id: `variant_${variantCount}`,
         raw_text: variantText,
         topic,
         sub_type: subType,
@@ -413,7 +279,7 @@ export default function EnginePage() {
       }
       setQuestions(prev => [...prev, variantQuestion])
 
-      const announcement = `[AI Variant #${variantCount + 1}]\n\n${variantText} `
+      const announcement = `[AI Variant #${variantCount + 1}]\n\n${variantText}`
       const newMessages = [...messages, { role: 'assistant', content: announcement }]
       setMessages(newMessages)
     } catch (e) {
@@ -441,7 +307,7 @@ export default function EnginePage() {
 
   async function handleNextLayer() {
     if (!nextLayer) {
-      navigate(`/ summary ? session = ${sessionId} `)
+      navigate(`/summary?session=${sessionId}`)
       return
     }
     setLoading(true)
@@ -484,7 +350,7 @@ export default function EnginePage() {
     } catch (e) {
       console.error('Failed to update session:', e)
     }
-    navigate(`/ summary ? session = ${sessionId} `)
+    navigate(`/summary?session=${sessionId}`)
   }
 
   const visibleMessages = messages.filter(m =>
