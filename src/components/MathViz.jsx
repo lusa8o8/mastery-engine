@@ -52,8 +52,8 @@ function FunctionPlot({ functions, xRange, yRange }) {
   return (
     <div style={{ margin: '1rem 0', border: '1px solid var(--border)', borderRadius: '2px' }}>
       <Mafs
-        xAxisExtent={xExtent}
-        yAxisExtent={yExtent}
+        viewBox={{ x: xExtent, y: yExtent, padding: 0 }}
+        preserveAspectRatio={false}
         height={280}
       >
         <Coordinates.Cartesian />
