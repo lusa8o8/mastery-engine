@@ -22,6 +22,7 @@ export async function getPapers(userId) {
       name,
       file_url,
       file_type,
+      assessment_type,
       uploaded_at,
       questions(id)
     `)
@@ -37,6 +38,7 @@ export async function getPapers(userId) {
         id: p.id,
         name: p.name || extractFileName(p.file_url),
         file_type: p.file_type,
+        assessment_type: p.assessment_type || null,
         uploaded_at: p.uploaded_at,
         question_count: p.questions.length
       }

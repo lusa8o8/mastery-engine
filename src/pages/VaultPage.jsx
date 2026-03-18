@@ -162,6 +162,16 @@ export default function VaultPage() {
                   onClick={function () { setSelectedPaper(paper.id) }}
                 >
                   {paper.name}
+                  {paper.assessment_type && (
+                    <span style={{
+                      marginLeft: '0.4rem',
+                      fontSize: '0.7rem',
+                      opacity: 0.6,
+                      fontStyle: 'italic'
+                    }}>
+                      {paper.assessment_type}
+                    </span>
+                  )}
                   {cov ? (
                     <span style={{ marginLeft: '0.5rem', opacity: 0.75 }}>
                       {cov.covered}/{cov.total} ({cov.pct}%)
