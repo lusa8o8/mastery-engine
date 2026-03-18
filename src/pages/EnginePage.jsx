@@ -6,6 +6,8 @@ import { getSystemPrompt, getUserMessage } from '../utils/enginePrompts'
 import { LAYERS, getNextLayer } from '../utils/constants'
 import { supabase } from '../api/supabase'
 import { logTokens, estimateCost } from '../utils/logTokens'
+import MathViz from '../components/MathViz'
+import { parseMessageSegments } from '../utils/parseMessageSegments'
 
 const ERROR_TYPES = {
   conceptual_gap: 'Conceptual Gap',
@@ -489,7 +491,26 @@ export default function EnginePage() {
             }}>
               {m.role === 'user' ? 'You' : 'Atlas'}
             </p>
-            <div style={{ lineHeight: '1.7' }} dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
+            <div style={{ lineHeight: '1.7' }}>
+              {parseMessageSegments(m.content).map((segment, si) => {
+                if (segment.type === 'text') {
+                  return (
+                    <div
+                      key={si}
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(segment.content) }}
+                    />
+                  )
+                }
+                if (segment.type === 'venn') {
+                  return (
+                    <div key={si} dangerouslySetInnerHTML={{
+                      __html: renderVennDiagram(segment.content)
+                    }} />
+                  )
+                }
+                return <MathViz key={si} type={segment.type} content={segment.content} />
+              })}
+            </div>
           </div>
         ))}
         {loading && (
