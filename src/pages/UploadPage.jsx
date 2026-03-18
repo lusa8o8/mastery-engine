@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { uploadPaper } from '../utils/uploadPaper'
 import { extractAndSave } from '../utils/extractQuestions'
+import { supabase } from '../api/supabase'
 
 const ACCEPTED = '.pdf,image/jpeg,image/jpg,image/png,image/webp'
 const MAX_SIZE_MB = 20
@@ -44,6 +45,32 @@ export default function UploadPage() {
     setFiles(prev => prev.filter(f => f.name !== name))
   }
 
+  async function checkDuplicates(filesToCheck) {
+    try {
+      const { data: existingPapers } = await supabase
+        .from('papers')
+        .select('name, file_url')
+        .eq('user_id', user.id)
+      if (!existingPapers || existingPapers.length === 0) return []
+      const duplicates = []
+      for (const file of filesToCheck) {
+        const isDuplicate = existingPapers.some(p => {
+          const storageName = p.file_url
+            .split('?')[0]
+            .split('/')
+            .pop()
+            .toLowerCase()
+          const uploadName = file.name.toLowerCase()
+          return storageName === uploadName || p.name === paperName.trim()
+        })
+        if (isDuplicate) duplicates.push(file.name)
+      }
+      return duplicates
+    } catch {
+      return []
+    }
+  }
+
   function getNameForFile(file, index) {
     if (!paperName.trim()) return null
     if (files.length === 1) return paperName.trim()
@@ -62,6 +89,16 @@ export default function UploadPage() {
     }
     setUploading(true)
     setResults([])
+
+    const duplicates = await checkDuplicates(files)
+    if (duplicates.length > 0) {
+      setUploading(false)
+      setResults(files.map(f => ({
+        name: f.name,
+        status: duplicates.includes(f.name) ? 'duplicate' : 'pending'
+      })))
+      return
+    }
 
     const outcomes = []
     for (let i = 0; i < files.length; i++) {
@@ -196,6 +233,11 @@ export default function UploadPage() {
                 )}
                 {result?.status === 'error' && (
                   <span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>Failed</span>
+                )}
+                {result?.status === 'duplicate' && (
+                  <span style={{ color: 'var(--error)', fontSize: '0.85rem' }}>
+                    Already uploaded — remove to skip
+                  </span>
                 )}
                 {!result && !uploading && (
                   <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => removeFile(f.name)}>

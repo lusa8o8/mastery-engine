@@ -456,8 +456,8 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
             <p style={{ fontWeight: 'bold', marginBottom: '0.35rem' }}>Exam Simulator</p>
             <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.75rem' }}>
               {data.confidence >= 70
-                ? 'Generate a simulated exam paper based on detected patterns.'
-                : `Reach 70% confidence to unlock exam simulation. Currently at ${data.confidence}%.`
+                ? 'Generate a full simulated exam paper based on detected examiner patterns.'
+                : `Reach 70% confidence to unlock. Currently at ${data.confidence}%. Upload more Past Exam PDFs to increase confidence.`
               }
             </p>
             <button
@@ -465,7 +465,7 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
               disabled={data.confidence < 70}
               onClick={() => navigate('/simulate')}
             >
-              {data.confidence >= 70 ? 'Simulate exam' : `Locked — ${70 - data.confidence}% more needed`}
+              {data.confidence >= 70 ? 'Simulate exam →' : `Locked — ${70 - data.confidence}% more needed`}
             </button>
           </div>
         </div>
