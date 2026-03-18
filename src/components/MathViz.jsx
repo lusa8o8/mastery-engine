@@ -43,20 +43,32 @@ function FunctionPlot({ functions, xRange, yRange }) {
 
     if (!isFinite(minY) || !isFinite(maxY)) return [-10, 10]
 
-    // Add 15% padding above and below
-    const padding = Math.max((maxY - minY) * 0.15, 1)
-    return [Math.floor(minY - padding), Math.ceil(maxY + padding)]
+    // Cap the visible range to keep the graph readable
+    // Show vertex area clearly — limit total height to 20 units max
+    const padding = Math.max((maxY - minY) * 0.1, 1)
+    const rawMin = minY - padding
+    const rawMax = maxY + padding
+    const totalRange = rawMax - rawMin
+    if (totalRange > 20) {
+      // Center around the interesting area (lower portion of parabola)
+      const center = rawMin + 10
+      return [Math.floor(rawMin), Math.ceil(rawMin + 20)]
+    }
+    return [Math.floor(rawMin), Math.ceil(rawMax)]
   })()
 
   const yExtent = computedYExtent
   return (
     <div style={{ margin: '1rem 0', border: '1px solid var(--border)', borderRadius: '2px' }}>
       <Mafs
-        viewBox={{ x: xExtent, y: yExtent, padding: 0 }}
+        viewBox={{ x: xExtent, y: yExtent, padding: 0.5 }}
         preserveAspectRatio={false}
         height={280}
       >
-        <Coordinates.Cartesian />
+        <Coordinates.Cartesian
+          xAxis={{ lines: 2 }}
+          yAxis={{ lines: 2 }}
+        />
         {(functions || []).map((fn, i) => (
           <Plot.OfX
             key={i}
