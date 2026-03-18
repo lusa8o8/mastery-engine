@@ -12,31 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    // Verify auth
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    )
-
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
-    }
-
-    // Parse request body
-    const { systemPrompt, messages, sessionId, context } = await req.json()
+    // Call Anthropic directly — auth checked via Supabase session
+    const { systemPrompt, messages, sessionId, context, userId } = await req.json()
 
     if (!systemPrompt || !messages) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -45,7 +24,6 @@ serve(async (req) => {
       })
     }
 
-    // Call Anthropic
     const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -70,10 +48,14 @@ serve(async (req) => {
     const text = anthropicData.content[0].text
     const usage = anthropicData.usage
 
-    // Log tokens server-side
-    if (usage && sessionId) {
+    // Log tokens if we have session info
+    if (usage && sessionId && userId) {
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
       await supabaseClient.from('token_logs').insert({
-        user_id: user.id,
+        user_id: userId,
         session_id: sessionId,
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
