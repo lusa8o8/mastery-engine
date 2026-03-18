@@ -250,13 +250,29 @@ export default function EnginePage() {
   const [variantCount, setVariantCount] = useState(0)
   const [sessionCost, setSessionCost] = useState(0)
   const bottomRef = useRef(null)
+  const lastAtlasRef = useRef(null)
+  const [showScrollButton, setShowScrollButton] = useState(false)
+  const prevLoadingRef = useRef(false)
 
   const currentLayerLabel = LAYERS.find(function (l) { return l.id === currentLayer })?.label || currentLayer
   const nextLayer = getNextLayer(currentLayer)
 
   useEffect(function () {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+    // Only scroll when loading transitions from true → false (response just landed)
+    if (prevLoadingRef.current === true && loading === false) {
+      lastAtlasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    prevLoadingRef.current = loading
+  }, [loading])
+
+  useEffect(function () {
+    const handleScroll = function () {
+      const distanceFromBottom = document.documentElement.scrollHeight - window.scrollY - window.innerHeight
+      setShowScrollButton(distanceFromBottom > 200)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return function () { window.removeEventListener('scroll', handleScroll) }
+  }, [])
 
   useEffect(function () {
     if (!user || initialized) return
@@ -473,7 +489,10 @@ export default function EnginePage() {
 
       <div style={{ marginBottom: '1.5rem' }}>
         {visibleMessages.map((m, i) => (
-          <div key={i} style={{
+          <div
+            key={i}
+            ref={m.role === 'assistant' && i === visibleMessages.length - 1 ? lastAtlasRef : null}
+            style={{
             marginBottom: '0',
             padding: '1.25rem 1rem',
             borderLeft: 'none',
@@ -532,6 +551,36 @@ export default function EnginePage() {
             ))}
           </div>
         </div>
+      )}
+
+      {showScrollButton && (
+        <button
+          onClick={function () {
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+            setShowScrollButton(false)
+          }}
+          style={{
+            position: 'fixed',
+            bottom: '9rem',
+            right: '1rem',
+            zIndex: 100,
+            background: 'var(--fg)',
+            color: 'var(--bg)',
+            border: 'none',
+            borderRadius: '50%',
+            width: '36px',
+            height: '36px',
+            fontSize: '1rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+          }}
+          title="Scroll to latest"
+        >
+          ↓
+        </button>
       )}
 
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '680px', background: 'var(--bg)', borderTop: '1px solid var(--border)', padding: '0.5rem 1rem' }}>
