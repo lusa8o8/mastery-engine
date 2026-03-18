@@ -8,7 +8,47 @@ import {
 // --- Function Plot (Mafs) ---
 function FunctionPlot({ functions, xRange, yRange }) {
   const xExtent = xRange || [-5, 5]
-  const yExtent = yRange || [-10, 10]
+
+  // Auto-calculate yRange by sampling all functions across xRange
+  const computedYExtent = (() => {
+    if (!functions || functions.length === 0) return yRange || [-10, 10]
+
+    const samples = 200
+    const xMin = xExtent[0]
+    const xMax = xExtent[1]
+    const step = (xMax - xMin) / samples
+    let minY = Infinity
+    let maxY = -Infinity
+
+    functions.forEach(fn => {
+      try {
+        const f = new Function('x', `
+          const abs = Math.abs, sqrt = Math.sqrt, sin = Math.sin,
+                cos = Math.cos, tan = Math.tan, log = Math.log,
+                exp = Math.exp, pow = Math.pow, PI = Math.PI;
+          return ${fn.expr.replace(/\^/g, '**')}
+        `)
+        for (let i = 0; i <= samples; i++) {
+          const x = xMin + i * step
+          const y = f(x)
+          if (isFinite(y)) {
+            if (y < minY) minY = y
+            if (y > maxY) maxY = y
+          }
+        }
+      } catch {
+        // skip invalid expressions
+      }
+    })
+
+    if (!isFinite(minY) || !isFinite(maxY)) return yRange || [-10, 10]
+
+    // Add 15% padding above and below
+    const padding = Math.max((maxY - minY) * 0.15, 1)
+    return [Math.floor(minY - padding), Math.ceil(maxY + padding)]
+  })()
+
+  const yExtent = computedYExtent
   return (
     <div style={{ margin: '1rem 0', border: '1px solid var(--border)', borderRadius: '2px' }}>
       <Mafs
