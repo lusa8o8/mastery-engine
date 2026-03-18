@@ -206,26 +206,25 @@ async function askClaude(systemPrompt, messages, userId, sessionId, context) {
 }
 
 async function generateVariant(topic, subType, layer, previousQuestions) {
-  const questionList = previousQuestions.map(function (q) { return q.raw_text }).join('\n')
-  const variantPrompt = 'You are a math exam question generator for "' + subType + '" in "' + topic + '".\nStudy these real exam questions carefully:\n' + questionList + '\n\nGenerate ONE new exam-style question that:\n- Matches the difficulty and style of the questions above\n- Tests the same concept but with different numbers or framing\n- For layer "' + layer + '": ' + (layer === 'traps' ? 'includes an examiner trick or trap' : layer === 'pressure' ? 'combines multiple concepts under time pressure' : 'is a clean direct application') + '\n\nReturn ONLY the question text. No explanation. No preamble.'
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      system: variantPrompt,
-      messages: [{ role: 'user', content: 'Generate the question.' }]
-    })
-  })
+  const { data: { session } } = await supabase.auth.getSession()
+
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/atlas-variant`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ topic, subType, layer, questions: previousQuestions })
+    }
+  )
+
   const data = await response.json()
-  if (!response.ok) throw new Error(data.error?.message || 'Variant generation failed')
-  return data.content[0].text
+  if (!response.ok) throw new Error(data.error || 'atlas-variant error')
+  if (data.error) throw new Error(data.error)
+  return data.text
 }
 
 export default function EnginePage() {
