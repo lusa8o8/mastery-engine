@@ -19,6 +19,7 @@ export async function getPapers(userId) {
     .from('papers')
     .select(`
       id,
+      name,
       file_url,
       file_type,
       uploaded_at,
@@ -34,7 +35,7 @@ export async function getPapers(userId) {
     .map(function(p) {
       return {
         id: p.id,
-        name: extractFileName(p.file_url),
+        name: p.name || extractFileName(p.file_url),
         file_type: p.file_type,
         uploaded_at: p.uploaded_at,
         question_count: p.questions.length

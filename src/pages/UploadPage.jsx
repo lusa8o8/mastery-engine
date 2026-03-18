@@ -14,6 +14,7 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false)
   const [results, setResults] = useState([])
   const [dragOver, setDragOver] = useState(false)
+  const [paperName, setPaperName] = useState('')
 
   function handleFiles(incoming) {
     const valid = Array.from(incoming).filter(f => {
@@ -33,17 +34,27 @@ export default function UploadPage() {
     setFiles(prev => prev.filter(f => f.name !== name))
   }
 
+  function getNameForFile(file, index) {
+    if (!paperName.trim()) return null
+    if (files.length === 1) return paperName.trim()
+    return `${paperName.trim()} ${index + 1}`
+  }
+
   async function handleUpload() {
     if (!files.length) return
+    if (!paperName.trim()) {
+      document.getElementById('paper-name-input').focus()
+      return
+    }
     setUploading(true)
     setResults([])
 
     const outcomes = []
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const name = getNameForFile(file, i)
       try {
-        // Step 1: upload file
-        const paper = await uploadPaper(file, user.id)
-        // Step 2: extract questions
+        const paper = await uploadPaper(file, user.id, name)
         const count = await extractAndSave(paper)
         outcomes.push({ name: file.name, status: 'done', count })
       } catch (err) {
@@ -58,6 +69,8 @@ export default function UploadPage() {
     if (allDone) setTimeout(() => navigate('/vault'), 1500)
   }
 
+  const isBatch = files.length > 1
+
   return (
     <div className="page">
       <h1>Upload</h1>
@@ -65,6 +78,28 @@ export default function UploadPage() {
         Upload past papers or tutorial sheets. PDF and images accepted. Max 20MB per file.
       </p>
 
+      {/* Name input */}
+      <div className="field" style={{ marginBottom: '1.5rem' }}>
+        <label className="label" htmlFor="paper-name-input">
+          {isBatch ? 'Batch name' : 'Paper name'} <span style={{ color: 'var(--error)' }}>*</span>
+        </label>
+        <input
+          id="paper-name-input"
+          type="text"
+          value={paperName}
+          onChange={e => setPaperName(e.target.value)}
+          placeholder={isBatch ? 'e.g. 2024 Past Papers (will become "2024 Past Papers 1", "2024 Past Papers 2"…)' : 'e.g. T_Sheet_1 or 2024 Mock Paper'}
+          disabled={uploading}
+          style={{ width: '100%' }}
+        />
+        {isBatch && paperName.trim() && (
+          <p className="muted" style={{ fontSize: '0.78rem', marginTop: '0.35rem' }}>
+            Files will be named: {files.slice(0, 3).map((_, i) => `"${paperName.trim()} ${i + 1}"`).join(', ')}{files.length > 3 ? '…' : ''}
+          </p>
+        )}
+      </div>
+
+      {/* Drop zone */}
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true) }}
         onDragLeave={() => setDragOver(false)}
@@ -91,13 +126,24 @@ export default function UploadPage() {
         />
       </div>
 
+      {/* File list */}
       {files.length > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
-          {files.map(f => {
+          {files.map((f, i) => {
             const result = results.find(r => r.name === f.name)
+            const assignedName = getNameForFile(f, i)
             return (
               <div key={f.name} className="row" style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ flex: 1, fontSize: '0.9rem' }}>{f.name}</span>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: '0.9rem' }}>
+                    {assignedName || f.name}
+                  </span>
+                  {assignedName && assignedName !== f.name && (
+                    <span className="muted" style={{ fontSize: '0.75rem', marginLeft: '0.5rem' }}>
+                      ({f.name})
+                    </span>
+                  )}
+                </div>
                 <span className="muted" style={{ fontSize: '0.8rem', marginRight: '1rem' }}>
                   {(f.size / 1024 / 1024).toFixed(1)} MB
                 </span>
