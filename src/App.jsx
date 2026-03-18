@@ -8,6 +8,7 @@ import EnginePage from './pages/EnginePage'
 import SummaryPage from './pages/SummaryPage'
 import ProgressPage from './pages/ProgressPage'
 import PatternsPage from './pages/PatternsPage'
+import SimulatePage from './pages/SimulatePage'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
         <Route path="/vault" element={<ProtectedRoute><VaultPage /></ProtectedRoute>} />
         <Route path="/patterns" element={<ProtectedRoute><PatternsPage /></ProtectedRoute>} />
+        <Route path="/simulate" element={<ProtectedRoute><SimulatePage /></ProtectedRoute>} />
         <Route path="/engine/:topic" element={<ProtectedRoute><EnginePage /></ProtectedRoute>} />
         <Route path="/summary" element={<ProtectedRoute><SummaryPage /></ProtectedRoute>} />
         <Route path="/progress" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
