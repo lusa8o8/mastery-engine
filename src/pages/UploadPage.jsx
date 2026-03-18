@@ -114,21 +114,28 @@ export default function UploadPage() {
       </div>
 
       <div className="field" style={{ marginBottom: '1.5rem' }}>
-        <label className="label" htmlFor="assessment-type-select">
+        <label className="label">
           Assessment type <span style={{ color: 'var(--error)' }}>*</span>
         </label>
-        <select
-          id="assessment-type-select"
-          value={assessmentType}
-          onChange={e => setAssessmentType(e.target.value)}
-          disabled={uploading}
-          style={{ width: '100%' }}
-        >
-          <option value="">Select type…</option>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.4rem' }}>
           {ASSESSMENT_TYPES.map(t => (
-            <option key={t} value={t}>{t}</option>
+            <button
+              key={t}
+              type="button"
+              className={assessmentType === t ? 'primary' : 'secondary'}
+              style={{ fontSize: '0.85rem', padding: '0.3rem 0.75rem' }}
+              disabled={uploading}
+              onClick={() => setAssessmentType(t)}
+            >
+              {t}
+            </button>
           ))}
-        </select>
+        </div>
+        {!assessmentType && (
+          <p id="assessment-type-select" style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', marginTop: '0.35rem' }}>
+            Select an assessment type above
+          </p>
+        )}
       </div>
 
       {/* Drop zone */}
