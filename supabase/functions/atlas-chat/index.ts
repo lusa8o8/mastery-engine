@@ -88,7 +88,8 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('Authorization')
-    const { systemPrompt, messages, sessionId, context, userId } = await req.json()
+    const { systemPrompt, messages, sessionId, context, userId, maxTokens } = await req.json()
+    const body = { systemPrompt, messages, sessionId, context, userId, maxTokens }
 
     if (!systemPrompt || !messages) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -106,7 +107,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2048,
+        max_tokens: body.maxTokens || 2048,
         system: systemPrompt,
         messages,
         tools: [RENDER_VIZ_TOOL],

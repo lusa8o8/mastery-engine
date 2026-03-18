@@ -123,7 +123,8 @@ export default function SimulatePage() {
           body: JSON.stringify({
             systemPrompt: 'You are Atlas, an expert math exam generator. You generate realistic exam papers in valid JSON format only. Never include text outside the JSON object.',
             messages: [{ role: 'user', content: prompt }],
-            context: 'exam_simulation'
+            context: 'exam_simulation',
+            maxTokens: 4096
           })
         }
       )
