@@ -35,7 +35,7 @@ ${favourites.slice(0, 12).join('\n') || 'Insufficient data'}
 ${hasMarks ? `MARK ALLOCATION PATTERNS:\n${data.markPatterns.slice(0, 8).map(m => `- ${m.topic}: avg ${m.avgMarks} marks per question`).join('\n')}` : ''}
 
 INSTRUCTIONS FOR GENERATION:
-1. Generate exactly ${Math.min(data.positionPatterns.length, 5)} questions following the detected position patterns
+1. Generate exactly ${Math.min(data.positionPatterns.length, 7)} questions following the detected position patterns
 2. Each question must have exactly 3 lettered parts: (a), (b), (c)
 3. Each part may have sub-parts (i), (ii) where needed — keep sub-parts minimal, 1-2 per part maximum
 4. Assign realistic mark allocations matching the patterns — each question should total approximately ${avgMarksPerQ} marks
@@ -124,7 +124,7 @@ export default function SimulatePage() {
             systemPrompt: 'You are Atlas, an expert math exam generator. You generate realistic exam papers in valid JSON format only. Never include text outside the JSON object.',
             messages: [{ role: 'user', content: prompt }],
             context: 'exam_simulation',
-            maxTokens: 6144
+            maxTokens: 8192
           })
         }
       )

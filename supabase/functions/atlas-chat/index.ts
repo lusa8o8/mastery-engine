@@ -106,12 +106,16 @@ serve(async (req) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: body.context === 'exam_simulation'
+          ? 'claude-sonnet-4-6'
+          : 'claude-haiku-4-5-20251001',
         max_tokens: body.maxTokens || 2048,
         system: systemPrompt,
         messages,
-        tools: [RENDER_VIZ_TOOL],
-        tool_choice: { type: 'auto' }
+        ...(body.context !== 'exam_simulation' ? {
+          tools: [RENDER_VIZ_TOOL],
+          tool_choice: { type: 'auto' }
+        } : {})
       })
     })
 
@@ -146,7 +150,7 @@ serve(async (req) => {
         session_id: sessionId,
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
-        model: 'claude-haiku-4-5-20251001',
+        model: body.context === 'exam_simulation' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001',
         context: context || 'engine'
       })
     }
