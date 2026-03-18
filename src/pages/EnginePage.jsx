@@ -7,8 +7,6 @@ import { LAYERS, getNextLayer } from '../utils/constants'
 import { supabase } from '../api/supabase'
 import { logTokens, estimateCost } from '../utils/logTokens'
 
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY
-
 const ERROR_TYPES = {
   conceptual_gap: 'Conceptual Gap',
   trap_failure: 'Trap Failure',
@@ -186,34 +184,12 @@ function renderMarkdown(text) {
 }
 
 async function askClaude(systemPrompt, messages, userId, sessionId, context) {
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2048,
-      system: systemPrompt,
-      messages
-    })
+  const { data, error } = await supabase.functions.invoke('atlas-chat', {
+    body: { systemPrompt, messages, sessionId, context }
   })
-  const data = await response.json()
-  if (!response.ok) throw new Error(data.error?.message || 'API error')
-  if (data.usage) {
-    logTokens({
-      userId,
-      sessionId,
-      inputTokens: data.usage.input_tokens,
-      outputTokens: data.usage.output_tokens,
-      model: 'claude-haiku-4-5-20251001',
-      context: context || 'engine'
-    })
-  }
-  return { text: data.content[0].text, usage: data.usage }
+  if (error) throw new Error(error.message || 'atlas-chat error')
+  if (data.error) throw new Error(data.error)
+  return { text: data.text, usage: data.usage }
 }
 
 async function generateVariant(topic, subType, layer, previousQuestions) {
