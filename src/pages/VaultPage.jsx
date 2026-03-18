@@ -121,6 +121,7 @@ export default function VaultPage() {
         <h1>Your papers</h1>
         <span className="spacer" />
         <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/home')}>← Home</button>
+        <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/patterns')}>Patterns</button>
         <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/progress')}>Progress</button>
         <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/upload')}>Upload more</button>
       </div>
