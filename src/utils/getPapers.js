@@ -2,8 +2,9 @@ import { supabase } from '../api/supabase'
 
 function extractFileName(fileUrl) {
   try {
-    const decoded = decodeURIComponent(fileUrl)
-    const parts = decoded.split('/')
+    // Remove query string first (handles signed URLs with ?token=...)
+    const urlWithoutQuery = fileUrl.split('?')[0]
+    const parts = urlWithoutQuery.split('/')
     const raw = parts[parts.length - 1]
     // Remove UUID prefix if present (format: uuid_filename.ext)
     const withoutUuid = raw.replace(/^[0-9a-f-]{36}_/i, '')
@@ -16,16 +17,27 @@ function extractFileName(fileUrl) {
 export async function getPapers(userId) {
   const { data, error } = await supabase
     .from('papers')
-    .select('id, file_url, file_type, uploaded_at')
+    .select(`
+      id,
+      file_url,
+      file_type,
+      uploaded_at,
+      questions(id)
+    `)
     .eq('user_id', userId)
     .order('uploaded_at', { ascending: false })
 
   if (error) throw error
 
-  return (data || []).map(p => ({
-    id: p.id,
-    name: extractFileName(p.file_url),
-    file_type: p.file_type,
-    uploaded_at: p.uploaded_at
-  }))
+  return (data || [])
+    .filter(function(p) { return p.questions && p.questions.length > 0 })
+    .map(function(p) {
+      return {
+        id: p.id,
+        name: extractFileName(p.file_url),
+        file_type: p.file_type,
+        uploaded_at: p.uploaded_at,
+        question_count: p.questions.length
+      }
+    })
 }

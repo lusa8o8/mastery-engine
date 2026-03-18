@@ -136,9 +136,13 @@ export default function VaultPage() {
                   onClick={function () { setSelectedPaper(paper.id) }}
                 >
                   {paper.name}
-                  {cov && (
+                  {cov ? (
                     <span style={{ marginLeft: '0.5rem', opacity: 0.75 }}>
                       {cov.covered}/{cov.total} ({cov.pct}%)
+                    </span>
+                  ) : (
+                    <span style={{ marginLeft: '0.5rem', opacity: 0.5 }}>
+                      {paper.question_count}q
                     </span>
                   )}
                 </button>
