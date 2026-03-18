@@ -1,6 +1,6 @@
 import { supabase } from '../api/supabase'
 
-export async function uploadPaper(file, userId, name) {
+export async function uploadPaper(file, userId, name, assessmentType) {
   const ext = file.name.split('.').pop().toLowerCase()
   const fileType = ext === 'pdf' ? 'pdf' : 'image'
   const fileName = `${userId}/${Date.now()}.${ext}`
@@ -16,7 +16,8 @@ export async function uploadPaper(file, userId, name) {
       user_id: userId,
       file_url: `papers/${fileName}`,
       file_type: fileType,
-      name: name || null
+      name: name || null,
+      assessment_type: assessmentType || null
     })
     .select()
     .single()

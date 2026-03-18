@@ -7,6 +7,15 @@ import { extractAndSave } from '../utils/extractQuestions'
 const ACCEPTED = '.pdf,image/jpeg,image/jpg,image/png,image/webp'
 const MAX_SIZE_MB = 20
 
+const ASSESSMENT_TYPES = [
+  'Past Exam',
+  'Mock Exam',
+  'Class Test',
+  'Quiz',
+  'Tutorial Sheet',
+  'Assignment'
+]
+
 export default function UploadPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -15,6 +24,7 @@ export default function UploadPage() {
   const [results, setResults] = useState([])
   const [dragOver, setDragOver] = useState(false)
   const [paperName, setPaperName] = useState('')
+  const [assessmentType, setAssessmentType] = useState('')
 
   function handleFiles(incoming) {
     const valid = Array.from(incoming).filter(f => {
@@ -46,6 +56,10 @@ export default function UploadPage() {
       document.getElementById('paper-name-input').focus()
       return
     }
+    if (!assessmentType) {
+      document.getElementById('assessment-type-select').focus()
+      return
+    }
     setUploading(true)
     setResults([])
 
@@ -54,7 +68,7 @@ export default function UploadPage() {
       const file = files[i]
       const name = getNameForFile(file, i)
       try {
-        const paper = await uploadPaper(file, user.id, name)
+        const paper = await uploadPaper(file, user.id, name, assessmentType)
         const count = await extractAndSave(paper)
         outcomes.push({ name: file.name, status: 'done', count })
       } catch (err) {
@@ -97,6 +111,24 @@ export default function UploadPage() {
             Files will be named: {files.slice(0, 3).map((_, i) => `"${paperName.trim()} ${i + 1}"`).join(', ')}{files.length > 3 ? '…' : ''}
           </p>
         )}
+      </div>
+
+      <div className="field" style={{ marginBottom: '1.5rem' }}>
+        <label className="label" htmlFor="assessment-type-select">
+          Assessment type <span style={{ color: 'var(--error)' }}>*</span>
+        </label>
+        <select
+          id="assessment-type-select"
+          value={assessmentType}
+          onChange={e => setAssessmentType(e.target.value)}
+          disabled={uploading}
+          style={{ width: '100%' }}
+        >
+          <option value="">Select type…</option>
+          {ASSESSMENT_TYPES.map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </div>
 
       {/* Drop zone */}
