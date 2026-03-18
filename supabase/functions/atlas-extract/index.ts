@@ -6,12 +6,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const EXTRACT_SYSTEM = `You are a math question extractor.
-Given a past paper or tutorial sheet, extract every math question exactly as written.
-For each question identify:
-- topic: the main math topic (e.g. "Sets", "Functions", "Complex Numbers", "Polynomials")
-- sub_type: the specific sub-type (e.g. "Union and Intersection", "Domain and Range", "Modulus")
+const EXTRACT_SYSTEM = `You are a math question extractor for past papers and tutorial sheets.
+
+Extract every math question exactly as written. For each question return a JSON object with these fields:
+
+- raw_text: the full question text exactly as written
+- topic: the main math topic (e.g. "Sets", "Functions", "Complex Numbers", "Polynomials", "Quadratic Functions")
+- sub_type: the specific sub-type (e.g. "Union and Intersection", "Domain and Range", "Modulus", "Completing the Square")
 - difficulty_hint: "basic", "intermediate", or "advanced"
+- section: the section letter or name if present on the paper (e.g. "A", "B", "C") — null if not present
+- question_number: the question number exactly as printed (e.g. "1", "2", "3a", "4b(ii)") — null if not clear
+- marks: the integer mark allocation for this question if printed on the paper (e.g. 3, 5, 10) — null if not shown
+
+IMPORTANT RULES:
+- Extract ALL questions including sub-parts (a, b, c) as separate entries
+- For sub-parts, question_number should be "1a", "1b", "2a(i)", "2a(ii)" etc.
+- marks should be an integer only — if the paper shows "[3]" or "(3 marks)" extract 3
+- If marks are not shown anywhere on the paper, use null — never guess
+- section should only be set if the paper explicitly labels sections (e.g. "SECTION A")
+- For images, do your best — marks and question numbers may be harder to read
+- topic and sub_type are always required — never null
+- raw_text must be the complete question including any given information
 
 Respond ONLY with a valid JSON array. No preamble. No explanation. No markdown fences.`
 
@@ -49,8 +64,24 @@ serve(async (req) => {
       })
     }
 
+    // If fileUrl is a storage path (not a full URL), generate a signed URL
+    let fetchUrl = fileUrl
+    if (!fileUrl.startsWith('http')) {
+      const bucket = 'papers'
+      const path = fileUrl.replace('papers/', '')
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
+      const { data: signed, error: signError } = await supabaseAdmin.storage
+        .from(bucket)
+        .createSignedUrl(path, 3600)
+      if (signError) throw new Error('Failed to generate signed URL: ' + signError.message)
+      fetchUrl = signed.signedUrl
+    }
+
     // Fetch file server-side
-    const fileResponse = await fetch(fileUrl)
+    const fileResponse = await fetch(fetchUrl)
     if (!fileResponse.ok) throw new Error(`Failed to fetch file: ${fileResponse.status}`)
     const arrayBuffer = await fileResponse.arrayBuffer()
     const uint8Array = new Uint8Array(arrayBuffer)
@@ -71,7 +102,7 @@ serve(async (req) => {
             type: 'document',
             source: { type: 'base64', media_type: 'application/pdf', data: base64 }
           },
-          { type: 'text', text: 'Extract all math questions. Return only the JSON array.' }
+          { type: 'text', text: 'Extract all math questions with their section, question number, and mark allocation where visible. Return only the JSON array.' }
         ]
       }]
     } else {
@@ -82,7 +113,7 @@ serve(async (req) => {
             type: 'image',
             source: { type: 'base64', media_type: mimeType, data: base64 }
           },
-          { type: 'text', text: 'Extract all math questions. Return only the JSON array.' }
+          { type: 'text', text: 'Extract all math questions with their section, question number, and mark allocation where visible. Return only the JSON array.' }
         ]
       }]
     }
@@ -126,7 +157,10 @@ serve(async (req) => {
       topic: q.topic,
       sub_type: q.sub_type,
       source: 'extracted',
-      difficulty_hint: q.difficulty_hint
+      difficulty_hint: q.difficulty_hint || null,
+      section: q.section || null,
+      question_number: q.question_number || null,
+      marks: typeof q.marks === 'number' ? q.marks : null
     }))
 
     const { error: dbError } = await supabaseClient.from('questions').insert(rows)
