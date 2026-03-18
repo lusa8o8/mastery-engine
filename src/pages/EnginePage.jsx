@@ -187,7 +187,7 @@ function renderMarkdown(text) {
 
 async function askClaude(systemPrompt, messages, userId, sessionId, context) {
   const { data: { session } } = await supabase.auth.getSession()
-  
+
   const response = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/atlas-chat`,
     {
@@ -197,14 +197,14 @@ async function askClaude(systemPrompt, messages, userId, sessionId, context) {
         'Authorization': `Bearer ${session?.access_token}`,
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       },
-      body: JSON.stringify({ systemPrompt, messages, sessionId, context })
+      body: JSON.stringify({ systemPrompt, messages, sessionId, context, userId })
     }
   )
 
   const data = await response.json()
   if (!response.ok) throw new Error(data.error || 'atlas-chat error')
   if (data.error) throw new Error(data.error)
-  return { text: data.text, usage: data.usage }
+  return { text: data.text, viz: data.viz || null, usage: data.usage }
 }
 
 async function generateVariant(topic, subType, layer, previousQuestions) {
@@ -311,11 +311,11 @@ export default function EnginePage() {
       setQuestions(safeQs)
       const systemPrompt = getSystemPrompt(topic, subType, 'foundation', safeQs)
       const userMsg = getUserMessage('start', 'foundation')
-      const { text: reply, usage } = await askClaude(systemPrompt, [{ role: 'user', content: userMsg }], user.id, sessionId, 'foundation_start')
+      const { text: reply, viz, usage } = await askClaude(systemPrompt, [{ role: 'user', content: userMsg }], user.id, sessionId, 'foundation_start')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
       setMessages([
         { role: 'user', content: userMsg },
-        { role: 'assistant', content: reply }
+        { role: 'assistant', content: reply, viz: viz || null }
       ])
     } catch (e) {
       setError(e.message)
@@ -343,9 +343,9 @@ export default function EnginePage() {
     try {
       const systemPrompt = getSystemPrompt(topic, subType, currentLayer, questions)
       const trimmedMessages = newMessages.slice(-6)
-      const { text: reply, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'engine_turn')
+      const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'engine_turn')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
-      setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply }] })
+      setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply, viz: viz || null }] })
       if (action !== 'clarify' && action !== 'next') {
         setShowErrorClassifier(true)
       }
@@ -417,9 +417,9 @@ export default function EnginePage() {
     try {
       const systemPrompt = getSystemPrompt(topic, subType, newLayer, questions)
       const trimmedMessages = newMessages.slice(-6)
-      const { text: reply, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'layer_transition')
+      const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'layer_transition')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
-      setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply }] })
+      setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply, viz: viz || null }] })
     } catch (e) {
       setError(e.message)
     } finally {
@@ -529,6 +529,13 @@ export default function EnginePage() {
                 }
                 return <MathViz key={si} type={segment.type} content={segment.content} />
               })}
+              {m.viz && (
+                <MathViz
+                  key="tool-viz"
+                  type={m.viz.type}
+                  content={JSON.stringify(m.viz)}
+                />
+              )}
             </div>
           </div>
         ))}
