@@ -1,30 +1,31 @@
 import { supabase } from '../api/supabase'
 
-export async function getVault(userId) {
-  const { data, error } = await supabase
+export async function getVault(userId, paperId = null) {
+  let query = supabase
     .from('questions')
-    .select('topic, sub_type')
+    .select('topic, sub_type, paper_id')
     .eq('user_id', userId)
     .eq('source', 'extracted')
 
-  if (error) throw error
-
-  // Group by topic -> sub_types with counts
-  const vault = {}
-  for (const row of data) {
-    const topic = row.topic || 'Uncategorised'
-    const sub = row.sub_type || 'General'
-    if (!vault[topic]) vault[topic] = {}
-    if (!vault[topic][sub]) vault[topic][sub] = 0
-    vault[topic][sub]++
+  if (paperId) {
+    query = query.eq('paper_id', paperId)
   }
 
-  // Convert to sorted array
-  return Object.entries(vault)
+  const { data, error } = await query
+  if (error) throw error
+
+  const topicMap = {}
+  for (const q of data || []) {
+    if (!topicMap[q.topic]) topicMap[q.topic] = {}
+    if (!topicMap[q.topic][q.sub_type]) topicMap[q.topic][q.sub_type] = 0
+    topicMap[q.topic][q.sub_type]++
+  }
+
+  return Object.entries(topicMap)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([topic, subs]) => ({
+    .map(([topic, subtypes]) => ({
       topic,
-      subtypes: Object.entries(subs)
+      subtypes: Object.entries(subtypes)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([sub_type, count]) => ({ sub_type, count }))
     }))

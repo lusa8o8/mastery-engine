@@ -1,60 +1,68 @@
 import { supabase } from '../api/supabase'
 
-export async function getCoverage(userId) {
-  const { data: questions, error: qError } = await supabase
+export async function getCoverage(userId, paperId = null) {
+  // Get questions (optionally filtered by paper)
+  let questionsQuery = supabase
     .from('questions')
-    .select('id, topic, sub_type')
+    .select('id, topic, sub_type, paper_id')
     .eq('user_id', userId)
     .eq('source', 'extracted')
 
+  if (paperId) {
+    questionsQuery = questionsQuery.eq('paper_id', paperId)
+  }
+
+  const { data: questions, error: qError } = await questionsQuery
   if (qError) throw qError
 
-  const { data: sessions } = await supabase
-    .from('sessions')
-    .select('id')
-    .eq('user_id', userId)
+  const questionIds = (questions || []).map(q => q.id)
 
-  const sessionIds = sessions?.map(s => s.id) || []
+  if (questionIds.length === 0) {
+    return []
+  }
 
+  // Get correct attempts for these questions
   const { data: attempts, error: aError } = await supabase
     .from('attempts')
-    .select('question_id')
+    .select('question_id, session_id')
     .eq('is_correct', true)
-    .not('question_id', 'is', null)
-    .in('session_id', sessionIds)
+    .in('question_id', questionIds)
 
   if (aError) throw aError
 
-  const coveredIds = new Set(attempts.map(a => a.question_id))
+  const coveredIds = new Set((attempts || []).map(a => a.question_id))
 
-  const coverage = {}
+  // Build coverage map per topic/sub_type
+  const topicMap = {}
   for (const q of questions) {
-    const topic = q.topic || 'Uncategorised'
-    const sub = q.sub_type || 'General'
-    if (!coverage[topic]) coverage[topic] = {}
-    if (!coverage[topic][sub]) coverage[topic][sub] = { total: 0, covered: 0 }
-    coverage[topic][sub].total++
-    if (coveredIds.has(q.id)) coverage[topic][sub].covered++
+    if (!topicMap[q.topic]) {
+      topicMap[q.topic] = { total: 0, covered: 0, subtypes: {} }
+    }
+    if (!topicMap[q.topic].subtypes[q.sub_type]) {
+      topicMap[q.topic].subtypes[q.sub_type] = { total: 0, covered: 0 }
+    }
+    topicMap[q.topic].total++
+    topicMap[q.topic].subtypes[q.sub_type].total++
+    if (coveredIds.has(q.id)) {
+      topicMap[q.topic].covered++
+      topicMap[q.topic].subtypes[q.sub_type].covered++
+    }
   }
 
-  return Object.entries(coverage)
+  return Object.entries(topicMap)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([topic, subs]) => {
-      const topicTotal = Object.values(subs).reduce((s, v) => s + v.total, 0)
-      const topicCovered = Object.values(subs).reduce((s, v) => s + v.covered, 0)
-      return {
-        topic,
-        total: topicTotal,
-        covered: topicCovered,
-        pct: topicTotal > 0 ? Math.round((topicCovered / topicTotal) * 100) : 0,
-        subtypes: Object.entries(subs)
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([sub_type, { total, covered }]) => ({
-            sub_type,
-            total,
-            covered,
-            pct: total > 0 ? Math.round((covered / total) * 100) : 0
-          }))
-      }
-    })
+    .map(([topic, data]) => ({
+      topic,
+      total: data.total,
+      covered: data.covered,
+      pct: data.total > 0 ? Math.round((data.covered / data.total) * 100) : 0,
+      subtypes: Object.entries(data.subtypes)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([sub_type, s]) => ({
+          sub_type,
+          total: s.total,
+          covered: s.covered,
+          pct: s.total > 0 ? Math.round((s.covered / s.total) * 100) : 0
+        }))
+    }))
 }

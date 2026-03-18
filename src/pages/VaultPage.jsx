@@ -3,155 +3,224 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getVault } from '../utils/getVault'
 import { getCoverage } from '../utils/getCoverage'
+import { getPapers } from '../utils/getPapers'
 import { supabase } from '../api/supabase'
 
 export default function VaultPage() {
-  const { user, signOut } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
+
+  const [papers, setPapers] = useState([])
+  const [selectedPaper, setSelectedPaper] = useState(null)
   const [vault, setVault] = useState([])
-  const [coverage, setCoverage] = useState({})
+  const [coverage, setCoverage] = useState([])
+  const [expanded, setExpanded] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [expanded, setExpanded] = useState({})
-  const [starting, setStarting] = useState('')
 
-  useEffect(() => {
+  useEffect(function () {
     if (!user) return
-    Promise.all([
-      getVault(user.id),
-      getCoverage(user.id)
-    ])
-      .then(([vaultData, coverageData]) => {
-        setVault(vaultData)
-        const idx = {}
-        for (const t of coverageData) {
-          idx[t.topic] = t
-        }
-        setCoverage(idx)
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false))
+    loadPapers()
   }, [user])
 
-  function toggleTopic(topic) {
-    setExpanded(prev => ({ ...prev, [topic]: !prev[topic] }))
-  }
+  useEffect(function () {
+    if (!user) return
+    loadVaultData(selectedPaper)
+  }, [user, selectedPaper])
 
-  async function startSession(topic, sub_type) {
-    const key = `${topic}__${sub_type}`
-    setStarting(key)
+  async function loadPapers() {
     try {
-      const { data, error } = await supabase
-        .from('sessions')
-        .insert({ user_id: user.id, topic, sub_type, current_layer: 'foundation' })
-        .select()
-        .single()
-      if (error) throw error
-      const encoded = encodeURIComponent(`${topic}__${sub_type}__${data.id}`)
-      navigate(`/engine/${encoded}`)
+      const data = await getPapers(user.id)
+      setPapers(data)
     } catch (e) {
-      setError(e.message)
-    } finally {
-      setStarting('')
+      console.error('Failed to load papers:', e)
     }
   }
 
-  async function handleSignOut() {
-    await signOut()
-    navigate('/auth')
+  async function loadVaultData(paperId) {
+    setLoading(true)
+    setError('')
+    try {
+      const [vaultData, coverageData] = await Promise.all([
+        getVault(user.id, paperId),
+        getCoverage(user.id, paperId)
+      ])
+      setVault(vaultData)
+      setCoverage(coverageData)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (loading) return <div className="page"><p className="muted">Loading your vault…</p></div>
+  function getCoverageForTopic(topic) {
+    return coverage.find(function (c) { return c.topic === topic }) || null
+  }
+
+  function getCoverageForSubType(topic, subType) {
+    const topicCov = getCoverageForTopic(topic)
+    if (!topicCov) return null
+    return topicCov.subtypes.find(function (s) { return s.sub_type === subType }) || null
+  }
+
+  function toggleExpanded(topic) {
+    setExpanded(function (prev) {
+      return { ...prev, [topic]: !prev[topic] }
+    })
+  }
+
+  async function startSession(topic, subType) {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .insert({
+          user_id: user.id,
+          topic,
+          sub_type: subType,
+          current_layer: 'foundation'
+        })
+        .select()
+        .single()
+      if (error) throw error
+      const encoded = encodeURIComponent(`${topic}__${subType}__${data.id}`)
+      navigate(`/engine/${encoded}`)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  // Compute per-paper coverage summary
+  function getPaperCoverage(paperId) {
+    // This is computed from the full vault/coverage when that paper is selected
+    // For the paper selector we show it from the current selected state
+    if (selectedPaper !== paperId) return null
+    const total = coverage.reduce(function (sum, t) { return sum + t.total }, 0)
+    const covered = coverage.reduce(function (sum, t) { return sum + t.covered }, 0)
+    if (total === 0) return null
+    return { total, covered, pct: Math.round((covered / total) * 100) }
+  }
 
   return (
     <div className="page">
-      <div className="row" style={{ marginBottom: '2rem' }}>
-        <h1 style={{ marginBottom: 0 }}>Your papers</h1>
+      {/* Header */}
+      <div className="row" style={{ marginBottom: '1.5rem' }}>
+        <h1>Your papers</h1>
         <span className="spacer" />
-        <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/home')}>
-          ← Home
-        </button>
-        <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/progress')}>
-          Progress
-        </button>
-        <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={handleSignOut}>
-          Sign out
-        </button>
-        <button className="secondary" onClick={() => navigate('/upload')}>
-          Upload more
-        </button>
+        <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/home')}>← Home</button>
+        <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/progress')}>Progress</button>
+        <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/upload')}>Upload more</button>
       </div>
 
-      {error && <p className="error-text" style={{ marginBottom: '1rem' }}>{error}</p>}
-
-      {vault.length === 0 && !error && (
-        <div>
-          <p className="muted">No questions found.</p>
-          <button className="ghost" onClick={() => navigate('/upload')}>Upload a paper to get started</button>
+      {/* Paper selector */}
+      {papers.length > 0 && (
+        <div style={{ marginBottom: '2rem' }}>
+          <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-muted)', marginBottom: '0.75rem' }}>
+            Filter by paper
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <button
+              className={selectedPaper === null ? 'primary' : 'secondary'}
+              style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+              onClick={function () { setSelectedPaper(null) }}
+            >
+              All papers
+            </button>
+            {papers.map(function (paper) {
+              const cov = getPaperCoverage(paper.id)
+              return (
+                <button
+                  key={paper.id}
+                  className={selectedPaper === paper.id ? 'primary' : 'secondary'}
+                  style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+                  onClick={function () { setSelectedPaper(paper.id) }}
+                >
+                  {paper.name}
+                  {cov && (
+                    <span style={{ marginLeft: '0.5rem', opacity: 0.75 }}>
+                      {cov.covered}/{cov.total} ({cov.pct}%)
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
-      {vault.map(({ topic, subtypes }) => {
-        const cov = coverage[topic]
-        return (
-          <div key={topic} style={{ marginBottom: '0.25rem' }}>
-            <button
-              className="ghost"
-              onClick={() => toggleTopic(topic)}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: '0.75rem 0',
-                borderBottom: '1px solid var(--border)',
-                fontSize: '1rem',
-                color: 'var(--fg)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center'
-              }}
-            >
-              <span>{topic}</span>
-              <span className="muted" style={{ fontSize: '0.8rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                {cov && (
-                  <span style={{ color: cov.pct === 100 ? 'var(--success)' : 'var(--fg-muted)' }}>
-                    {cov.covered}/{cov.total} covered ({cov.pct}%)
-                  </span>
-                )}
-                <span>{subtypes.length} sub-topic{subtypes.length !== 1 ? 's' : ''} {expanded[topic] ? '↑' : '↓'}</span>
-              </span>
-            </button>
+      {error && <p className="error-text" style={{ marginBottom: '1rem' }}>{error}</p>}
 
-            {expanded[topic] && (
-              <div style={{ paddingLeft: '1rem', paddingTop: '0.5rem', paddingBottom: '0.75rem' }}>
-                {subtypes.map(({ sub_type, count }) => {
-                  const key = `${topic}__${sub_type}`
-                  const subCov = cov?.subtypes?.find(s => s.sub_type === sub_type)
-                  return (
-                    <div key={sub_type} className="row" style={{ padding: '0.4rem 0', borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontSize: '0.95rem' }}>{sub_type}</span>
-                        {subCov && (
-                          <span className="muted" style={{ fontSize: '0.78rem', marginLeft: '0.75rem' }}>
-                            {subCov.covered}/{subCov.total} ({subCov.pct}%)
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        className="primary"
-                        style={{ fontSize: '0.85rem', padding: '0.35rem 0.9rem' }}
-                        disabled={starting === key}
-                        onClick={() => startSession(topic, sub_type)}
-                      >
-                        {starting === key ? 'Starting…' : subCov?.pct === 100 ? 'Revisit' : 'Begin'}
-                      </button>
-                    </div>
-                  )
-                })}
+      {loading ? (
+        <p className="muted">Loading…</p>
+      ) : vault.length === 0 ? (
+        <p className="muted">No questions found. <button className="ghost" onClick={() => navigate('/upload')}>Upload a paper</button></p>
+      ) : (
+        <div>
+          {vault.map(function (topicData) {
+            const topicCov = getCoverageForTopic(topicData.topic)
+            const isExpanded = expanded[topicData.topic]
+            const totalQuestions = topicData.subtypes.reduce(function (s, st) { return s + st.count }, 0)
+
+            return (
+              <div key={topicData.topic} style={{ borderBottom: '1px solid var(--border)' }}>
+                <div
+                  className="row"
+                  style={{ padding: '1rem 0', cursor: 'pointer' }}
+                  onClick={function () { toggleExpanded(topicData.topic) }}
+                >
+                  <div>
+                    <p style={{ marginBottom: '0.1rem' }}>{topicData.topic}</p>
+                    <p className="muted" style={{ fontSize: '0.8rem' }}>
+                      {topicCov
+                        ? `${topicCov.covered}/${topicCov.total} covered (${topicCov.pct}%)`
+                        : `0/${totalQuestions} covered (0%)`
+                      }
+                    </p>
+                  </div>
+                  <span className="spacer" />
+                  <p className="muted" style={{ fontSize: '0.8rem' }}>
+                    {topicData.subtypes.length} sub-topic{topicData.subtypes.length !== 1 ? 's' : ''} {isExpanded ? '↑' : '↓'}
+                  </p>
+                </div>
+
+                {isExpanded && (
+                  <div style={{ paddingBottom: '1rem' }}>
+                    {topicData.subtypes.map(function (st) {
+                      const stCov = getCoverageForSubType(topicData.topic, st.sub_type)
+                      const covered = stCov ? stCov.covered : 0
+                      const pct = stCov ? stCov.pct : 0
+
+                      return (
+                        <div key={st.sub_type} className="row" style={{
+                          padding: '0.6rem 0 0.6rem 1rem',
+                          borderTop: '1px solid var(--border)'
+                        }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontSize: '0.9rem', marginBottom: '0.2rem' }}>{st.sub_type}</p>
+                            <p className="muted" style={{ fontSize: '0.75rem' }}>
+                              {covered}/{st.count} covered ({pct}%)
+                            </p>
+                          </div>
+                          <button
+                            className={covered > 0 ? 'secondary' : 'primary'}
+                            style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
+                            onClick={function (e) {
+                              e.stopPropagation()
+                              startSession(topicData.topic, st.sub_type)
+                            }}
+                          >
+                            {covered > 0 ? 'Revisit' : 'Begin'}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )
-      })}
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
