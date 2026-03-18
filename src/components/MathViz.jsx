@@ -41,7 +41,7 @@ function FunctionPlot({ functions, xRange, yRange }) {
       }
     })
 
-    if (!isFinite(minY) || !isFinite(maxY)) return yRange || [-10, 10]
+    if (!isFinite(minY) || !isFinite(maxY)) return [-10, 10]
 
     // Add 15% padding above and below
     const padding = Math.max((maxY - minY) * 0.15, 1)

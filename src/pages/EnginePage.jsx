@@ -164,6 +164,7 @@ function renderMarkdown(text) {
   out = out
     .replace(/\$\$(.+?)\$\$/gs, '<em style="font-style:italic;font-family:Georgia,serif">$1</em>')
     .replace(/\$(.+?)\$/g, '<em style="font-style:italic;font-family:Georgia,serif">$1</em>')
+    .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h2>$1</h2>')
