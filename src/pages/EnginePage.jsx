@@ -184,8 +184,13 @@ function renderMarkdown(text) {
 }
 
 async function askClaude(systemPrompt, messages, userId, sessionId, context) {
+  const { data: { session } } = await supabase.auth.getSession()
   const { data, error } = await supabase.functions.invoke('atlas-chat', {
-    body: { systemPrompt, messages, sessionId, context }
+    body: { systemPrompt, messages, sessionId, context },
+    headers: {
+      Authorization: `Bearer ${session?.access_token}`,
+      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY
+    }
   })
   if (error) throw new Error(error.message || 'atlas-chat error')
   if (data.error) throw new Error(data.error)
