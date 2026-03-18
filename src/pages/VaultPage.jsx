@@ -17,6 +17,8 @@ export default function VaultPage() {
   const [expanded, setExpanded] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [editingPaper, setEditingPaper] = useState(null)
+  const [editName, setEditName] = useState('')
 
   useEffect(function () {
     if (!user) return
@@ -52,6 +54,17 @@ export default function VaultPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function savePaperName(paperId) {
+    if (!editName.trim()) { setEditingPaper(null); return }
+    try {
+      await supabase.from('papers').update({ name: editName.trim() }).eq('id', paperId)
+      setPapers(prev => prev.map(p => p.id === paperId ? { ...p, name: editName.trim() } : p))
+    } catch (e) {
+      console.error('Failed to rename paper:', e)
+    }
+    setEditingPaper(null)
   }
 
   function getCoverageForTopic(topic) {
@@ -129,8 +142,21 @@ export default function VaultPage() {
             {papers.map(function (paper) {
               const cov = getPaperCoverage(paper.id)
               return (
+                <div key={paper.id} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              {editingPaper === paper.id ? (
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onBlur={() => savePaperName(paper.id)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') savePaperName(paper.id)
+                    if (e.key === 'Escape') setEditingPaper(null)
+                  }}
+                  style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem', width: '160px' }}
+                />
+              ) : (
                 <button
-                  key={paper.id}
                   className={selectedPaper === paper.id ? 'primary' : 'secondary'}
                   style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
                   onClick={function () { setSelectedPaper(paper.id) }}
@@ -146,6 +172,20 @@ export default function VaultPage() {
                     </span>
                   )}
                 </button>
+              )}
+              <button
+                className="ghost"
+                style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'unset', opacity: 0.6 }}
+                title="Rename"
+                onClick={function (e) {
+                  e.stopPropagation()
+                  setEditingPaper(paper.id)
+                  setEditName(paper.name)
+                }}
+              >
+                ✎
+              </button>
+            </div>
               )
             })}
           </div>
