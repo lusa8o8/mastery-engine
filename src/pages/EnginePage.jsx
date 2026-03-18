@@ -185,14 +185,22 @@ function renderMarkdown(text) {
 
 async function askClaude(systemPrompt, messages, userId, sessionId, context) {
   const { data: { session } } = await supabase.auth.getSession()
-  const { data, error } = await supabase.functions.invoke('atlas-chat', {
-    body: { systemPrompt, messages, sessionId, context },
-    headers: {
-      Authorization: `Bearer ${session?.access_token}`,
-      apikey: import.meta.env.VITE_SUPABASE_ANON_KEY
+  
+  const response = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/atlas-chat`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ systemPrompt, messages, sessionId, context })
     }
-  })
-  if (error) throw new Error(error.message || 'atlas-chat error')
+  )
+
+  const data = await response.json()
+  if (!response.ok) throw new Error(data.error || 'atlas-chat error')
   if (data.error) throw new Error(data.error)
   return { text: data.text, usage: data.usage }
 }
