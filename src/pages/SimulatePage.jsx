@@ -73,32 +73,93 @@ Respond with ONLY a valid JSON object in exactly this format — no preamble, no
 function renderQuestionText(text) {
   if (!text) return ''
 
-  // Detect and convert markdown tables
-  // Only match table blocks that have at least 2 pipe chars per line
-  // and span multiple lines — avoids matching |absolute value| notation
-  const tablePattern = /((?:\|[^|\n]+\|[^|\n]*\|[ \t]*\n){2,})/g
-  const result = text.replace(tablePattern, function(tableBlock) {
-    const rows = tableBlock.trim().split('\n').filter(r => r.trim())
-    const isSeparator = r => /^\|[\s\-:|]+\|$/.test(r.trim())
-    const parseRow = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+  // Split into segments — detect table blocks vs normal text
+  // Tables: lines that start and end with | and have multiple cells
+  const lines = text.split('\n')
+  const segments = []
+  let tableLines = []
+  let textLines = []
 
-    let html = '<table style="border-collapse:collapse;margin:0.5rem 0;font-size:0.85rem">'
-    let isHeader = true
-    for (const row of rows) {
-      if (isSeparator(row)) { isHeader = false; continue }
-      const cells = parseRow(row)
-      const tag = isHeader ? 'th' : 'td'
-      const style = isHeader
-        ? 'border:1px solid #999;padding:0.3rem 0.6rem;text-align:center;background:#f5f5f5;color:#000'
-        : 'border:1px solid #999;padding:0.3rem 0.6rem;text-align:center;color:#000'
-      html += '<tr>' + cells.map(c => `<${tag} style="${style}">${c}</${tag}>`).join('') + '</tr>'
-      isHeader = false
+  function flushText() {
+    if (textLines.length > 0) {
+      segments.push({ type: 'text', content: textLines.join('\n') })
+      textLines = []
     }
-    html += '</table>'
-    return html
-  })
+  }
+
+  function flushTable() {
+    if (tableLines.length > 0) {
+      segments.push({ type: 'table', content: tableLines.join('\n') })
+      tableLines = []
+    }
+  }
+
+  function isTableLine(line) {
+    const trimmed = line.trim()
+    // Must start and end with | and have at least 2 pipe chars total
+    const pipes = (trimmed.match(/\|/g) || []).length
+    return trimmed.startsWith('|') && trimmed.endsWith('|') && pipes >= 3
+  }
+
+  for (const line of lines) {
+    if (isTableLine(line)) {
+      flushText()
+      tableLines.push(line)
+    } else {
+      flushTable()
+      textLines.push(line)
+    }
+  }
+  flushText()
+  flushTable()
+
+  // Also handle inline tables on a single line
+  // e.g. "| x | 1 | 2 | | P(X=x) | 0.1 | k |"
+  const result = segments.map(seg => {
+    if (seg.type === 'table') {
+      return renderTable(seg.content)
+    }
+    // Check for inline table pattern in text
+    const inlineTablePattern = /(\|(?:[^|\n]+\|){2,})/g
+    if (inlineTablePattern.test(seg.content)) {
+      // Split text around inline table segments
+      return seg.content.replace(
+        /(\|(?:[^|\n]+\|){2,}(?:\s*\|(?:[^|\n]+\|){2,})*)/g,
+        match => renderTable(match)
+      )
+    }
+    return seg.content
+  }).join('')
 
   return result
+}
+
+function renderTable(tableText) {
+  const rows = tableText.trim().split('\n').filter(r => r.trim())
+  const isSeparator = r => /^\|[\s\-:|]+\|$/.test(r.trim())
+  const parseRow = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+
+  // Handle single-line table (all rows concatenated)
+  const allRows = rows.length === 1
+    ? tableText.trim().split(/\|\s*\|/).map(r => '|' + r + '|').filter(r => r.trim() !== '||')
+    : rows
+
+  let html = '<table style="border-collapse:collapse;margin:0.5rem 0;font-size:0.85rem">'
+  let isHeader = true
+  for (const row of allRows) {
+    if (!row.trim()) continue
+    if (isSeparator(row)) { isHeader = false; continue }
+    const cells = parseRow(row)
+    if (cells.length < 2) continue
+    const tag = isHeader ? 'th' : 'td'
+    const style = isHeader
+      ? 'border:1px solid var(--border);padding:0.3rem 0.6rem;text-align:center;background:var(--bg-subtle)'
+      : 'border:1px solid var(--border);padding:0.3rem 0.6rem;text-align:center'
+    html += '<tr>' + cells.map(c => `<${tag} style="${style}">${c}</${tag}>`).join('') + '</tr>'
+    isHeader = false
+  }
+  html += '</table>'
+  return html
 }
 
 export default function SimulatePage() {
