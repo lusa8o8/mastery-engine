@@ -225,7 +225,6 @@ export default function SimulatePage() {
       if (result.error) throw new Error(result.error)
 
       const raw = result.text.replace(/```json|```/g, '').trim()
-      console.log('RAW EXAM:', raw)
       const examData = JSON.parse(raw)
       setExam(examData)
       setView('exam')
