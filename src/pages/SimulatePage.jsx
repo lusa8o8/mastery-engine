@@ -70,6 +70,35 @@ Respond with ONLY a valid JSON object in exactly this format — no preamble, no
 }`
 }
 
+function renderQuestionText(text) {
+  if (!text) return ''
+
+  // Detect and convert markdown tables
+  const tablePattern = /((?:\|.*\|[ \t]*\n?)+)/g
+  const result = text.replace(tablePattern, function(tableBlock) {
+    const rows = tableBlock.trim().split('\n').filter(r => r.trim())
+    const isSeparator = r => /^\|[\s\-:|]+\|$/.test(r.trim())
+    const parseRow = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+
+    let html = '<table style="border-collapse:collapse;margin:0.5rem 0;font-size:0.85rem">'
+    let isHeader = true
+    for (const row of rows) {
+      if (isSeparator(row)) { isHeader = false; continue }
+      const cells = parseRow(row)
+      const tag = isHeader ? 'th' : 'td'
+      const style = isHeader
+        ? 'border:1px solid #999;padding:0.3rem 0.6rem;text-align:center;background:#f5f5f5;color:#000'
+        : 'border:1px solid #999;padding:0.3rem 0.6rem;text-align:center;color:#000'
+      html += '<tr>' + cells.map(c => `<${tag} style="${style}">${c}</${tag}>`).join('') + '</tr>'
+      isHeader = false
+    }
+    html += '</table>'
+    return html
+  })
+
+  return result
+}
+
 export default function SimulatePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -319,7 +348,8 @@ export default function SimulatePage() {
                 <div key={pi} style={{ marginBottom: '1rem', paddingLeft: '1rem' }}>
                   <div className="row" style={{ marginBottom: '0.4rem', alignItems: 'flex-start' }}>
                     <p style={{ fontSize: '0.95rem', flex: 1 }}>
-                      <strong>({part.label})</strong> {part.text}
+                      <strong>({part.label})</strong>{' '}
+                      <span dangerouslySetInnerHTML={{ __html: renderQuestionText(part.text) }} />
                     </p>
                     {part.marks && !part.subparts?.length && (
                       <span style={{ fontSize: '0.8rem', color: 'var(--fg-muted)', marginLeft: '1rem', whiteSpace: 'nowrap' }}>
@@ -335,7 +365,8 @@ export default function SimulatePage() {
                       alignItems: 'flex-start'
                     }}>
                       <p style={{ fontSize: '0.9rem', flex: 1 }}>
-                        <strong>{sub.label}.</strong> {sub.text}
+                        <strong>{sub.label}.</strong>{' '}
+                        <span dangerouslySetInnerHTML={{ __html: renderQuestionText(sub.text) }} />
                       </p>
                       {sub.marks && (
                         <span style={{ fontSize: '0.8rem', color: 'var(--fg-muted)', marginLeft: '1rem', whiteSpace: 'nowrap' }}>
