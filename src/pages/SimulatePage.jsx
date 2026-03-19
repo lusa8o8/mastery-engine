@@ -74,7 +74,9 @@ function renderQuestionText(text) {
   if (!text) return ''
 
   // Detect and convert markdown tables
-  const tablePattern = /((?:\|.*\|[ \t]*\n?)+)/g
+  // Only match table blocks that have at least 2 pipe chars per line
+  // and span multiple lines — avoids matching |absolute value| notation
+  const tablePattern = /((?:\|[^|\n]+\|[^|\n]*\|[ \t]*\n){2,})/g
   const result = text.replace(tablePattern, function(tableBlock) {
     const rows = tableBlock.trim().split('\n').filter(r => r.trim())
     const isSeparator = r => /^\|[\s\-:|]+\|$/.test(r.trim())
