@@ -205,11 +205,110 @@ function NumberLine({ min, max, points, intervals, label }) {
   )
 }
 
+// --- Venn Diagram ---
+const shadeRegionVenn = (regionId, circles, is3Set, w, h, shadeFill, shadeOpacity) => {
+  const inSets = []
+  const outSets = []
+  const count = is3Set ? 3 : 2
+  const map3 = {
+    A_only: [0], B_only: [1], C_only: [2],
+    A_intersect_B: [0, 1], A_intersect_C: [0, 2], B_intersect_C: [1, 2],
+    A_intersect_B_intersect_C: [0, 1, 2],
+    outside: []
+  }
+  const map2 = {
+    A_only: [0], B_only: [1],
+    A_intersect_B: [0, 1],
+    outside: []
+  }
+  const map = is3Set ? map3 : map2
+  const ins = map[regionId] || []
+  for (let i = 0; i < count; i++) {
+    ins.includes(i) ? inSets.push(i) : outSets.push(i)
+  }
+  if (regionId === 'outside') {
+    return {
+      html: '<rect x="0" y="0" width="' + w + '" height="' + h + '" fill="' + shadeFill + '" opacity="' + shadeOpacity + '"/>' +
+        circles.map(function(c) { return '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + c.r + '" fill="var(--bg)"/>'; }).join(''),
+      extraDefs: ''
+    }
+  }
+  if (inSets.length === 0) return { html: '', extraDefs: '' }
+  if (outSets.length === 0) {
+    const html = inSets.reduce(function(inner, i) {
+      return '<g clip-path="url(#vcp' + i + ')">' + inner + '</g>'
+    }, '<rect x="0" y="0" width="' + w + '" height="' + h + '" fill="' + shadeFill + '" opacity="' + shadeOpacity + '"/>')
+    return { html: html, extraDefs: '' }
+  }
+  const maskId = 'vmask_' + regionId.replace(/\W/g, '_')
+  let maskContent = '<rect x="0" y="0" width="' + w + '" height="' + h + '" fill="black"/>'
+  maskContent += '<rect x="0" y="0" width="' + w + '" height="' + h + '" fill="white" ' +
+    inSets.map(function(i) { return 'clip-path="url(#vcp' + i + ')"'; }).join(' ') + '/>'
+  outSets.forEach(function(i) {
+    maskContent += '<circle cx="' + circles[i].x + '" cy="' + circles[i].y + '" r="' + circles[i].r + '" fill="black"/>'
+  })
+  const extraDefs = '<mask id="' + maskId + '">' + maskContent + '</mask>'
+  const html = inSets.reduce(function(inner, i) {
+    return '<g clip-path="url(#vcp' + i + ')">' + inner + '</g>'
+  }, '<rect x="0" y="0" width="' + w + '" height="' + h + '" fill="' + shadeFill + '" opacity="' + shadeOpacity + '" mask="url(#' + maskId + ')"/>')
+  return { html: html, extraDefs: extraDefs }
+}
+
+function VennDiagram({ sets, shaded, universal }) {
+  const safeSets = Array.isArray(sets) ? sets : []
+  const safeShaded = Array.isArray(shaded) ? shaded : []
+  const safeUniversal = universal || 'U'
+  const is3Set = safeSets.length === 3
+  const w = 320
+  const h = is3Set ? 320 : 240
+  const cx = w / 2
+  const cy = is3Set ? 130 : h / 2
+  const circles = is3Set ? [
+    { x: cx - 45, y: cy - 30, r: 75, label: safeSets[0] },
+    { x: cx + 45, y: cy - 30, r: 75, label: safeSets[1] },
+    { x: cx, y: cy + 55, r: 75, label: safeSets[2] }
+  ] : [
+    { x: cx - 50, y: cy, r: 85, label: safeSets[0] },
+    { x: cx + 50, y: cy, r: 85, label: safeSets[1] }
+  ]
+  const fg = 'var(--fg)'
+  const shadeFill = 'var(--border-focus)'
+  const shadeOpacity = '0.45'
+  const circleStroke = 'var(--border-focus)'
+  let clipPaths = ''
+  circles.forEach(function(c, i) {
+    clipPaths += '<clipPath id="vcp' + i + '"><circle cx="' + c.x + '" cy="' + c.y + '" r="' + c.r + '"/></clipPath>'
+  })
+  let extraDefs = ''
+  let shadeLayers = ''
+  safeShaded.forEach(function(regionId) {
+    const result = shadeRegionVenn(regionId, circles, is3Set, w, h, shadeFill, shadeOpacity)
+    extraDefs += result.extraDefs
+    shadeLayers += result.html
+  })
+  const finalDefs = '<defs>' + clipPaths + extraDefs + '</defs>'
+  const circleOutlines = circles.map(function(c) {
+    return '<circle cx="' + c.x + '" cy="' + c.y + '" r="' + c.r + '" fill="transparent" stroke="' + circleStroke + '" stroke-width="1.5"/>'
+  }).join('')
+  const labelOffsets = is3Set
+    ? [{ dx: -75, dy: -65 }, { dx: 75, dy: -65 }, { dx: 0, dy: 95 }]
+    : [{ dx: -80, dy: 0 }, { dx: 80, dy: 0 }]
+  const labels = circles.map(function(c, i) {
+    return '<text x="' + (c.x + labelOffsets[i].dx) + '" y="' + (c.y + labelOffsets[i].dy) + '" text-anchor="middle" font-size="13" font-family="Georgia,serif" fill="' + fg + '" font-weight="bold">' + c.label + '</text>'
+  }).join('')
+  const uLabel = '<text x="8" y="18" font-size="11" font-family="Georgia,serif" fill="' + fg + '" opacity="0.6">' + safeUniversal + '</text>'
+  const svgStr = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" style="display:block;margin:1rem auto;border:1px solid var(--border);border-radius:2px;background:var(--bg)">' +
+    finalDefs +
+    '<rect x="1" y="1" width="' + (w - 2) + '" height="' + (h - 2) + '" rx="2" fill="transparent" stroke="var(--border)" stroke-width="1"/>' +
+    shadeLayers + circleOutlines + labels + uLabel + '</svg>'
+  return <div dangerouslySetInnerHTML={{ __html: svgStr }} />
+}
 // --- Dispatcher ---
 const RENDERERS = {
   function_plot: FunctionPlot,
   histogram: Histogram,
   number_line: NumberLine,
+  set_diagram: VennDiagram,
 }
 
 export default function MathViz({ type, content }) {
@@ -238,3 +337,4 @@ export default function MathViz({ type, content }) {
     )
   }
 }
+
