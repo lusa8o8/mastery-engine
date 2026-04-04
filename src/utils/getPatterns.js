@@ -177,7 +177,7 @@ export async function getPatterns(userId) {
   // Get all papers with assessment type
   const { data: papersData, error: papersError } = await supabase
     .from('papers')
-    .select('id, name, assessment_type, uploaded_at')
+    .select('id, name, assessment_type, uploaded_at, instructions, time_minutes, total_questions, attempt_questions, calculators_allowed')
     .eq('user_id', userId)
     .order('uploaded_at', { ascending: false })
 
@@ -222,3 +222,4 @@ export async function getPatterns(userId) {
     markPatterns: computeMarkPatterns(papers, questions)
   }
 }
+

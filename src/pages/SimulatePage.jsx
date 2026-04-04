@@ -13,6 +13,27 @@ function buildSimulationPrompt(data) {
   const positions = data.positionPatterns
     .map(p => `${p.position}: ${p.topics.slice(0, 2).map(t => t.topic).join(' / ')}`)
 
+  const realInstructions = examPapers
+    .filter(p => p.instructions && p.instructions.length > 0)
+    .flatMap(p => p.instructions)
+    .filter((v, i, a) => a.indexOf(v) === i)
+
+  const calculatorsAllowed = examPapers.some(p => p.calculators_allowed === true)
+    ? true
+    : examPapers.some(p => p.calculators_allowed === false)
+    ? false
+    : null
+
+  const timeMinutes = examPapers
+    .map(p => p.time_minutes)
+    .filter(Boolean)
+    .sort()[0] || 180
+
+  const attemptQ = examPapers
+    .map(p => p.attempt_questions)
+    .filter(Boolean)
+    .sort()[0] || Math.min(data.positionPatterns.length, 7)
+
   const hasMarks = data.markPatterns.length > 0
   const avgMarksPerQ = hasMarks
     ? Math.round(data.markPatterns.reduce((s, m) => s + m.totalMarks, 0) / data.positionPatterns.length)
@@ -35,7 +56,7 @@ ${favourites.slice(0, 12).join('\n') || 'Insufficient data'}
 ${hasMarks ? `MARK ALLOCATION PATTERNS:\n${data.markPatterns.slice(0, 8).map(m => `- ${m.topic}: avg ${m.avgMarks} marks per question`).join('\n')}` : ''}
 
 INSTRUCTIONS FOR GENERATION:
-1. Generate exactly ${Math.min(data.positionPatterns.length, 7)} questions following the detected position patterns
+1. Generate exactly ${attemptQ} questions following the detected position patterns
 2. Each question must have exactly 3 lettered parts: (a), (b), (c)
 3. Each part may have sub-parts (i), (ii) where needed — keep sub-parts minimal, 1-2 per part maximum
 4. Assign realistic mark allocations matching the patterns — each question should total approximately ${avgMarksPerQ} marks
@@ -48,8 +69,8 @@ Respond with ONLY a valid JSON object in exactly this format — no preamble, no
 {
   "title": "Simulated Exam Paper",
   "subtitle": "Based on ${examPapers.length} past paper${examPapers.length !== 1 ? 's' : ''} — For practice only",
-  "instructions": ["string", "string"],
-  "timeMinutes": number,
+  "instructions": ${realInstructions.length > 0 ? JSON.stringify(realInstructions) : '["Attempt any 5 questions", "Show all working clearly", "' + (calculatorsAllowed === false ? 'Calculators are NOT allowed' : calculatorsAllowed === true ? 'Calculators are permitted' : 'Check your paper for calculator policy') + '"]'},
+  "timeMinutes": ${timeMinutes},
   "totalMarks": number,
   "questions": [
     {
@@ -470,3 +491,4 @@ export default function SimulatePage() {
 
   return null
 }
+
