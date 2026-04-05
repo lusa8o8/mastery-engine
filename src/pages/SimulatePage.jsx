@@ -16,7 +16,8 @@ function buildSimulationPrompt(data) {
   const realInstructions = examPapers
     .filter(p => p.instructions && p.instructions.length > 0)
     .flatMap(p => p.instructions)
-    .filter((v, i, a) => a.indexOf(v) === i)
+    .map(s => s.trim())
+    .filter((v, i, a) => a.findIndex(x => x.toLowerCase() === v.toLowerCase()) === i)
 
   const calculatorsAllowed = examPapers.some(p => p.calculators_allowed === true)
     ? true
@@ -491,4 +492,5 @@ export default function SimulatePage() {
 
   return null
 }
+
 
