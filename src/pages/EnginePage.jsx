@@ -8,6 +8,7 @@ import { supabase } from '../api/supabase'
 import { logTokens, estimateCost } from '../utils/logTokens'
 import MathViz from '../components/MathViz'
 import { parseMessageSegments } from '../utils/parseMessageSegments'
+import { renderMath } from '../utils/renderMath'
 
 const ERROR_TYPES = {
   conceptual_gap: 'Conceptual Gap',
@@ -162,8 +163,20 @@ function renderMarkdown(text) {
     return html
   })
   out = out
-    .replace(/\$\$(.+?)\$\$/gs, '<em style="font-style:italic;font-family:Georgia,serif">$1</em>')
-    .replace(/\$(.+?)\$/g, '<em style="font-style:italic;font-family:Georgia,serif">$1</em>')
+    .replace(/\$\$([^$]+?)\$\$/gs, function(match, tex) {
+      try {
+        return window.katex
+          ? window.katex.renderToString(tex.trim(), { displayMode: true, throwOnError: false, strict: false })
+          : '<em>' + tex + '</em>'
+      } catch { return '<em>' + tex + '</em>' }
+    })
+    .replace(/\$([^$\n]+?)\$/g, function(match, tex) {
+      try {
+        return window.katex
+          ? window.katex.renderToString(tex.trim(), { displayMode: false, throwOnError: false, strict: false })
+          : '<em>' + tex + '</em>'
+      } catch { return '<em>' + tex + '</em>' }
+    })
     .replace(/^#### (.+)$/gm, '<h4>$1</h4>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
