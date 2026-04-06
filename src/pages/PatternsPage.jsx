@@ -191,8 +191,6 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
       <div className="row" style={{ marginBottom: '1.5rem' }}>
         <h1>Patterns</h1>
         <span className="spacer" />
-        <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/vault')}>← Vault</button>
-        <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/home')}>Home</button>
       </div>
 
       {/* Exam papers context */}
