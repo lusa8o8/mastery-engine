@@ -258,6 +258,7 @@ export default function EnginePage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [questions, setQuestions] = useState([])
+  const [currentQuestion, setCurrentQuestion] = useState(null)
   const [showErrorClassifier, setShowErrorClassifier] = useState(false)
   const [pendingAnswer, setPendingAnswer] = useState('')
   const [initialized, setInitialized] = useState(false)
@@ -361,7 +362,21 @@ export default function EnginePage() {
       })
       const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'engine_turn')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
-      setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply, viz: viz || null }] })
+      const assistantMsg = { role: 'assistant', content: reply, viz }
+      setMessages(function (prev) { return [...prev, assistantMsg] })
+
+      // Persist both user message and assistant reply to DB
+      try {
+        await supabase.from('messages').insert([
+          { session_id: sessionId, role: 'user', content: input.trim() },
+          { session_id: sessionId, role: 'assistant', content: reply, viz: viz || null }
+        ])
+        await supabase.from('sessions').update({
+          last_active_at: new Date().toISOString()
+        }).eq('id', sessionId)
+      } catch (e) {
+        console.error('Failed to persist messages:', e)
+      }
       if (action !== 'clarify' && action !== 'next') {
         setShowErrorClassifier(true)
       }
@@ -402,6 +417,7 @@ export default function EnginePage() {
     try {
       await supabase.from('attempts').insert({
         session_id: sessionId,
+        question_id: currentQuestion?.id || null,
         layer: currentLayer,
         user_answer: pendingAnswer,
         is_correct: errorType === null,
@@ -447,7 +463,44 @@ export default function EnginePage() {
 
   async function handleEndSession() {
     try {
-      await supabase.from('sessions').update({ current_layer: currentLayer }).eq('id', sessionId)
+      await supabase.from('sessions').update({
+        current_layer: currentLayer,
+        last_active_at: new Date().toISOString()
+      }).eq('id', sessionId)
+
+      // Generate session summary in background
+      if (messages.length > 2) {
+        const summaryPrompt = `Summarise this tutoring session in 3-5 sentences. Cover: what sub-topic was studied, which layer was reached, what errors were made, and what the student should focus on next. Be specific and concise.\n\nSession: ${topic} — ${subType}\nLayer reached: ${currentLayer}\n\nConversation:\n${messages.slice(-10).map(m => m.role.toUpperCase() + ': ' + m.content.slice(0, 200)).join('\n')}`
+
+        try {
+          const { data: { session: authSession } } = await supabase.auth.getSession()
+          const response = await fetch(
+            import.meta.env.VITE_SUPABASE_URL + '/functions/v1/atlas-chat',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + authSession?.access_token,
+                'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+              },
+              body: JSON.stringify({
+                systemPrompt: 'You are a concise session summariser. Write 3-5 sentences only. No preamble.',
+                messages: [{ role: 'user', content: summaryPrompt }],
+                context: 'session_summary',
+                maxTokens: 300
+              })
+            }
+          )
+          const result = await response.json()
+          if (result.text) {
+            await supabase.from('sessions').update({
+              summary: result.text
+            }).eq('id', sessionId)
+          }
+        } catch (e) {
+          console.error('Failed to generate summary:', e)
+        }
+      }
     } catch (e) {
       console.error('Failed to update session:', e)
     }
