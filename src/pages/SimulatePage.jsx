@@ -13,11 +13,11 @@ function buildSimulationPrompt(data) {
   const positions = data.positionPatterns
     .map(p => `${p.position}: ${p.topics.slice(0, 2).map(t => t.topic).join(' / ')}`)
 
-  const realInstructions = examPapers
+  // Use instructions from the most recent paper that has them
+  const paperWithInstructions = examPapers
     .filter(p => p.instructions && p.instructions.length > 0)
-    .flatMap(p => p.instructions)
-    .map(s => s.trim())
-    .filter((v, i, a) => a.findIndex(x => x.toLowerCase() === v.toLowerCase()) === i)
+    .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())[0]
+  const realInstructions = paperWithInstructions?.instructions || []
 
   const calculatorsAllowed = examPapers.some(p => p.calculators_allowed === true)
     ? true
