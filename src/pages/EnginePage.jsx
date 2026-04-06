@@ -356,7 +356,9 @@ export default function EnginePage() {
     else setAnswerInput('')
     try {
       const systemPrompt = getSystemPrompt(topic, subType, currentLayer, questions)
-      const trimmedMessages = newMessages.slice(-6)
+      const trimmedMessages = newMessages.slice(-6).map(function(m) {
+        return { role: m.role, content: m.content }
+      })
       const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'engine_turn')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
       setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply, viz: viz || null }] })
@@ -430,7 +432,9 @@ export default function EnginePage() {
     setMessages(newMessages)
     try {
       const systemPrompt = getSystemPrompt(topic, subType, newLayer, questions)
-      const trimmedMessages = newMessages.slice(-6)
+      const trimmedMessages = newMessages.slice(-6).map(function(m) {
+        return { role: m.role, content: m.content }
+      })
       const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'layer_transition')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
       setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply, viz: viz || null }] })
