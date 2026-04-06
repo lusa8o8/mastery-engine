@@ -103,14 +103,21 @@ serve(async (req) => {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '',
-        'anthropic-version': '2023-06-01'
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31'
       },
       body: JSON.stringify({
         model: body.context === 'exam_simulation'
           ? 'claude-sonnet-4-6'
           : 'claude-haiku-4-5-20251001',
         max_tokens: body.maxTokens || 2048,
-        system: systemPrompt,
+        system: [
+          {
+            type: 'text',
+            text: systemPrompt,
+            cache_control: { type: 'ephemeral' }
+          }
+        ],
         messages,
         ...(body.context !== 'exam_simulation' ? {
           tools: [RENDER_VIZ_TOOL],
