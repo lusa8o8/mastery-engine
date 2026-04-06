@@ -468,7 +468,6 @@ export default function EnginePage() {
         <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={handleEndSession} disabled={loading}>
           End session
         </button>
-        <button className="ghost" onClick={() => navigate('/vault')}>← Vault</button>
       </div>
 
       <div className="row" style={{ marginBottom: '2rem', gap: '0.5rem', flexWrap: 'wrap' }}>
