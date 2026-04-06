@@ -417,7 +417,7 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
               )}
               {narrative && (
                 <div
-                  style={{ lineHeight: '1.8' }}
+                  style={{ lineHeight: '1.8', textAlign: 'justify' }}
                   dangerouslySetInnerHTML={{ __html: renderMarkdown(narrative) }}
                 />
               )}
@@ -433,11 +433,11 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
               )}
               {narrative && (
                 <button
-                  className="ghost"
+                  className="secondary"
                   style={{ marginTop: '1.5rem', fontSize: '0.85rem' }}
                   onClick={() => { setNarrative(''); loadNarrative() }}
                 >
-                  Regenerate
+                  Regenerate analysis
                 </button>
               )}
             </div>
