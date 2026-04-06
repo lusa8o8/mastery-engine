@@ -140,7 +140,7 @@ function renderMarkdown(text) {
     .replace(/&/g, '&amp;')
     .replace(/<(?!%%)/g, '&lt;')
     .replace(/>/g, '&gt;')
-  out = out.replace(/((?:\|.*\|[ \t]*\n?)+)/g, function (tableBlock) {
+  out = out.replace(/((?:\|[^\n]+\|[ \t]*\n){2,})/g, function (tableBlock) {
     const rows = tableBlock.trim().split('\n').filter(function (r) { return r.trim() })
     const isSeparator = function (r) { return /^\|[\s\-:|]+\|$/.test(r.trim()) }
     const parseRow = function (r) {
