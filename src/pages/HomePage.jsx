@@ -110,8 +110,8 @@ export default function HomePage() {
         <button className="secondary" onClick={() => navigate('/upload')}>
           Upload papers
         </button>
-        <button className="secondary" onClick={() => navigate('/progress')}>
-          Progress
+        <button className="secondary" onClick={() => navigate('/patterns')}>
+          Patterns
         </button>
       </div>
 
