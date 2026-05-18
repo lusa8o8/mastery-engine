@@ -19,6 +19,7 @@ export default function VaultPage() {
   const [error, setError] = useState('')
   const [editingPaper, setEditingPaper] = useState(null)
   const [editName, setEditName] = useState('')
+  const [paperMenuOpen, setPaperMenuOpen] = useState(false)
 
   useEffect(function () {
     if (!user) return
@@ -113,6 +114,12 @@ export default function VaultPage() {
     return Math.max(0, Math.min(100, pct)) + '%'
   }
 
+  function getDisplayPaperName(paper, index) {
+    const name = paper.name || ''
+    if (/^\d+\.pdf$/i.test(name)) return 'Untitled PDF ' + (index + 1)
+    return name || 'Untitled paper ' + (index + 1)
+  }
+
   async function startSession(topic, subType) {
     try {
       const { data, error } = await supabase
@@ -136,6 +143,12 @@ export default function VaultPage() {
   const selectedTopicData = vault.find(function (topicData) {
     return topicData.topic === selectedTopic
   })
+  const activePaper = papers.find(function (paper) {
+    return paper.id === selectedPaper
+  }) || null
+  const activePaperIndex = activePaper
+    ? papers.findIndex(function (paper) { return paper.id === activePaper.id })
+    : -1
 
   return (
     <div className="page">
@@ -150,73 +163,177 @@ export default function VaultPage() {
 
       {papers.length > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
-          <p style={{
-            fontSize: '0.75rem',
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: 'var(--fg-muted)',
-            marginBottom: '0.75rem'
-          }}>
-            Filter by paper
-          </p>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <button
-              className={selectedPaper === null ? 'primary' : 'secondary'}
-              style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
-              onClick={function () { setSelectedPaper(null) }}
-            >
-              All papers
-            </button>
-            {papers.map(function (paper) {
-              return (
-                <div key={paper.id} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  {editingPaper === paper.id ? (
-                    <input
-                      autoFocus
-                      value={editName}
-                      onChange={function (e) { setEditName(e.target.value) }}
-                      onBlur={function () { savePaperName(paper.id) }}
-                      onKeyDown={function (e) {
-                        if (e.key === 'Enter') savePaperName(paper.id)
-                        if (e.key === 'Escape') setEditingPaper(null)
-                      }}
-                      style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem', width: '160px' }}
-                    />
-                  ) : (
-                    <button
-                      className={selectedPaper === paper.id ? 'primary' : 'secondary'}
-                      style={{ fontSize: '0.8rem', padding: '0.3rem 0.75rem' }}
-                      onClick={function () { setSelectedPaper(paper.id) }}
-                    >
-                      {paper.name}
-                      {paper.assessment_type && (
-                        <span style={{
-                          marginLeft: '0.4rem',
-                          fontSize: '0.7rem',
-                          opacity: 0.65,
-                          fontStyle: 'italic'
-                        }}>
-                          {paper.assessment_type}
-                        </span>
-                      )}
-                    </button>
-                  )}
+          <div className="row" style={{ alignItems: 'flex-end', gap: '1rem', marginBottom: '0.75rem' }}>
+            <div style={{ flex: 1, minWidth: '220px', position: 'relative' }}>
+              <label
+                htmlFor="paper-filter"
+                style={{
+                  display: 'block',
+                  fontSize: '0.75rem',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: 'var(--fg-muted)',
+                  marginBottom: '0.4rem'
+                }}
+              >
+                Paper
+              </label>
+              <button
+                id="paper-filter"
+                type="button"
+                className="secondary"
+                aria-haspopup="listbox"
+                aria-expanded={paperMenuOpen}
+                onClick={function () { setPaperMenuOpen(function (open) { return !open }) }}
+                style={{
+                  width: '100%',
+                  minHeight: '44px',
+                  padding: '0.45rem 0.75rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '1rem',
+                  textAlign: 'left'
+                }}
+              >
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {activePaper ? getDisplayPaperName(activePaper, activePaperIndex) : 'All papers'}
+                </span>
+                <span style={{ color: 'var(--fg-muted)', fontSize: '0.8rem' }}>
+                  {paperMenuOpen ? 'Close' : 'Select'}
+                </span>
+              </button>
+
+              {paperMenuOpen && (
+                <div
+                  role="listbox"
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    zIndex: 20,
+                    marginTop: '0.35rem',
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg)',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                    maxHeight: '260px',
+                    overflowY: 'auto'
+                  }}
+                >
                   <button
-                    className="ghost"
-                    style={{ fontSize: '0.75rem', padding: '0.2rem 0.4rem', minHeight: 'unset', opacity: 0.6 }}
-                    title="Rename"
-                    onClick={function (e) {
-                      e.stopPropagation()
-                      setEditingPaper(paper.id)
-                      setEditName(paper.name)
+                    type="button"
+                    role="option"
+                    aria-selected={selectedPaper === null}
+                    className={selectedPaper === null ? 'primary' : 'ghost'}
+                    onClick={function () {
+                      setSelectedPaper(null)
+                      setPaperMenuOpen(false)
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'block',
+                      textAlign: 'left',
+                      padding: '0.65rem 0.75rem',
+                      borderRadius: 0,
+                      minHeight: 'unset'
                     }}
                   >
-                    Edit
+                    All papers
                   </button>
+                  {papers.map(function (paper, index) {
+                    const active = selectedPaper === paper.id
+                    return (
+                      <button
+                        key={paper.id}
+                        type="button"
+                        role="option"
+                        aria-selected={active}
+                        className={active ? 'primary' : 'ghost'}
+                        onClick={function () {
+                          setSelectedPaper(paper.id)
+                          setPaperMenuOpen(false)
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: '1rem',
+                          textAlign: 'left',
+                          padding: '0.65rem 0.75rem',
+                          borderTop: '1px solid var(--border)',
+                          borderRadius: 0,
+                          minHeight: 'unset'
+                        }}
+                      >
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {getDisplayPaperName(paper, index)}
+                        </span>
+                        {paper.assessment_type && (
+                          <span style={{
+                            flexShrink: 0,
+                            color: active ? 'var(--bg)' : 'var(--fg-muted)',
+                            fontSize: '0.75rem',
+                            fontStyle: 'italic',
+                            opacity: active ? 0.8 : 1
+                          }}>
+                            {paper.assessment_type}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
-              )
-            })}
+              )}
+            </div>
+            <div className="muted" style={{ fontSize: '0.9rem', paddingBottom: '0.45rem', whiteSpace: 'nowrap' }}>
+              {vault.length} topic{vault.length !== 1 ? 's' : ''} - {getOverallCoveragePct()}% covered
+            </div>
           </div>
+
+          {activePaper && (
+            <div className="row" style={{
+              padding: '0.55rem 0',
+              borderTop: '1px solid var(--border)',
+              borderBottom: '1px solid var(--border)',
+              marginBottom: '1.5rem'
+            }}>
+              {editingPaper === activePaper.id ? (
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={function (e) { setEditName(e.target.value) }}
+                  onBlur={function () { savePaperName(activePaper.id) }}
+                  onKeyDown={function (e) {
+                    if (e.key === 'Enter') savePaperName(activePaper.id)
+                    if (e.key === 'Escape') setEditingPaper(null)
+                  }}
+                  style={{ fontSize: '0.85rem', padding: '0.3rem 0.5rem', maxWidth: '260px' }}
+                />
+              ) : (
+                <p style={{ marginBottom: 0, fontSize: '0.9rem' }}>
+                  {getDisplayPaperName(activePaper, activePaperIndex)}
+                  {activePaper.assessment_type && (
+                    <span className="muted" style={{ marginLeft: '0.5rem', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                      {activePaper.assessment_type}
+                    </span>
+                  )}
+                </p>
+              )}
+              <span className="spacer" />
+              <button
+                className="ghost"
+                style={{ fontSize: '0.8rem' }}
+                onClick={function () {
+                  setEditingPaper(activePaper.id)
+                  setEditName(activePaper.name || '')
+                }}
+              >
+                Rename
+              </button>
+            </div>
+          )}
+
         </div>
       )}
 
@@ -231,10 +348,6 @@ export default function VaultPage() {
       ) : (
         <div>
           <div style={{ marginBottom: '1.5rem' }}>
-            <p className="muted" style={{ fontSize: '0.9rem', marginBottom: '0.75rem' }}>
-              {vault.length} topic{vault.length !== 1 ? 's' : ''} - {getOverallCoveragePct()}% covered
-            </p>
-
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
