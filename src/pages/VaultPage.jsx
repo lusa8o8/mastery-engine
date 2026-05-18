@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getVault } from '../utils/getVault'
@@ -20,6 +20,7 @@ export default function VaultPage() {
   const [editingPaper, setEditingPaper] = useState(null)
   const [editName, setEditName] = useState('')
   const [paperMenuOpen, setPaperMenuOpen] = useState(false)
+  const paperMenuRef = useRef(null)
 
   useEffect(function () {
     if (!user) return
@@ -43,6 +44,31 @@ export default function VaultPage() {
       setSelectedTopic(vault[0].topic)
     }
   }, [vault, selectedTopic])
+
+  useEffect(function () {
+    if (!paperMenuOpen) return
+
+    function handlePointerDown(event) {
+      if (!paperMenuRef.current) return
+      if (!paperMenuRef.current.contains(event.target)) {
+        setPaperMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setPaperMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return function () {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [paperMenuOpen])
 
   async function loadPapers() {
     try {
@@ -164,7 +190,7 @@ export default function VaultPage() {
       {papers.length > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
           <div className="row" style={{ alignItems: 'flex-end', gap: '1rem', marginBottom: '0.75rem' }}>
-            <div style={{ flex: 1, minWidth: '220px', position: 'relative' }}>
+            <div ref={paperMenuRef} style={{ flex: 1, minWidth: '220px', position: 'relative' }}>
               <label
                 htmlFor="paper-filter"
                 style={{
