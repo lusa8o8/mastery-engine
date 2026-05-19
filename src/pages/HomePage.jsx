@@ -5,7 +5,6 @@ import { supabase } from '../api/supabase'
 import { getUserTokens } from '../utils/logTokens'
 
 const THEMES = ['paper', 'white', 'dark', 'forest']
-const THEME_LABELS = { paper: '📄', white: '⬜', dark: '⬛', forest: '🌲' }
 
 export default function HomePage() {
   const { user, signOut } = useAuth()
@@ -13,26 +12,24 @@ export default function HomePage() {
   const [recentSessions, setRecentSessions] = useState([])
   const [tokenData, setTokenData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const THEMES = ['paper', 'white', 'dark', 'forest']
 
-  const [theme, setTheme] = useState(() => {
+  const [theme, setTheme] = useState(function () {
     return localStorage.getItem('solvd-theme') || 'paper'
   })
 
-  useEffect(() => {
+  useEffect(function () {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('solvd-theme', theme)
   }, [theme])
 
   function cycleTheme() {
-    setTheme(prev => {
+    setTheme(function (prev) {
       const idx = THEMES.indexOf(prev)
-      const next = THEMES[(idx + 1) % THEMES.length]
-      return next
+      return THEMES[(idx + 1) % THEMES.length]
     })
   }
 
-  useEffect(() => {
+  useEffect(function () {
     if (!user) return
     loadHome()
   }, [user])
@@ -47,9 +44,9 @@ export default function HomePage() {
         .order('created_at', { ascending: false })
 
       const seen = new Set()
-      const sessions = (allSessions || []).filter(s => {
-        if (seen.has(s.topic)) return false
-        seen.add(s.topic)
+      const sessions = (allSessions || []).filter(function (session) {
+        if (seen.has(session.topic)) return false
+        seen.add(session.topic)
         return true
       }).slice(0, 5)
 
@@ -71,8 +68,20 @@ export default function HomePage() {
 
   function formatDate(ts) {
     return new Date(ts).toLocaleDateString('en-GB', {
-      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
     })
+  }
+
+  function continueSession(session) {
+    if (session.sub_type) {
+      const encoded = encodeURIComponent(`${session.topic}__${session.sub_type}__${session.id}`)
+      navigate(`/engine/${encoded}`, { state: { resume: true } })
+    } else {
+      navigate('/vault')
+    }
   }
 
   return (
@@ -101,8 +110,9 @@ export default function HomePage() {
       </div>
 
       <p className="muted" style={{ marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-        Atlas is ready. Upload your papers and work through every question — one sub-topic at a time.
+        Atlas is ready. Upload your papers and work through every question - one sub-topic at a time.
       </p>
+
       <div className="row" style={{ marginBottom: '2.5rem', gap: '0.75rem', flexWrap: 'wrap' }}>
         <button className="primary" onClick={() => navigate('/vault')}>
           Start a session
@@ -140,42 +150,89 @@ export default function HomePage() {
       <hr className="divider" />
 
       <div style={{ marginBottom: '2rem' }}>
-        <h2 style={{ marginBottom: '1rem' }}>Recent sessions</h2>
+        <div className="row" style={{ marginBottom: '1rem' }}>
+          <h2 style={{ marginBottom: 0 }}>Recent sessions</h2>
+          <span className="spacer" />
+          {!loading && recentSessions.length > 0 && (
+            <span className="muted" style={{ fontSize: '0.85rem' }}>
+              {recentSessions.length} topic{recentSessions.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
 
-        {loading && <p className="muted">Loading…</p>}
+        {loading && <p className="muted">Loading...</p>}
 
         {!loading && recentSessions.length === 0 && (
           <p className="muted">No sessions yet. Upload a paper and let Atlas guide you through it.</p>
         )}
 
-        {recentSessions.map(s => (
-          <div
-            key={s.id}
-            className="row"
-            style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--border)' }}
-          >
-            <div style={{ flex: 1 }}>
-              <p style={{ fontSize: '0.95rem', marginBottom: '0.1rem' }}>{s.topic}</p>
-              <p className="muted" style={{ fontSize: '0.8rem' }}>
-                {s.current_layer} · {formatDate(s.created_at)}
-              </p>
-            </div>
-            <button
-              className="ghost"
-              style={{ fontSize: '0.85rem' }}
-              onClick={() => {
-                if (s.sub_type) {
-                  const encoded = encodeURIComponent(`${s.topic}__${s.sub_type}__${s.id}`)
-                  navigate(`/engine/${encoded}`, { state: { resume: true } })
-                } else {
-                  navigate('/vault')
-                }
-              }}
-            >
-              Continue →
-            </button>
+        {!loading && recentSessions.length > 0 && (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+            gap: '0.75rem'
+          }}>
+            {recentSessions.map(function (session) {
+              return (
+                <button
+                  key={session.id}
+                  type="button"
+                  className="secondary"
+                  onClick={function () { continueSession(session) }}
+                  style={{
+                    minHeight: 'unset',
+                    padding: '0.85rem',
+                    textAlign: 'left',
+                    display: 'block',
+                    lineHeight: 1.35
+                  }}
+                >
+                  <span style={{
+                    display: 'block',
+                    fontSize: '0.95rem',
+                    marginBottom: '0.35rem',
+                    color: 'var(--fg)'
+                  }}>
+                    {session.topic}
+                  </span>
+                  {session.sub_type && (
+                    <span style={{
+                      display: 'block',
+                      fontSize: '0.78rem',
+                      color: 'var(--fg-muted)',
+                      marginBottom: '0.45rem',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {session.sub_type}
+                    </span>
+                  )}
+                  <span style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: '0.5rem',
+                    color: 'var(--fg-muted)',
+                    fontSize: '0.76rem'
+                  }}>
+                    <span>{session.current_layer || 'foundation'}</span>
+                    <span>{formatDate(session.created_at)}</span>
+                  </span>
+                  <span style={{
+                    display: 'block',
+                    borderTop: '1px solid var(--border)',
+                    marginTop: '0.65rem',
+                    paddingTop: '0.5rem',
+                    color: 'var(--fg)',
+                    fontSize: '0.8rem'
+                  }}>
+                    Continue
+                  </span>
+                </button>
+              )
+            })}
           </div>
-        ))}
+        )}
       </div>
     </div>
   )
