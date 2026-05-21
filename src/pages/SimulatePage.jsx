@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getPatterns } from '../utils/getPatterns'
@@ -12,11 +12,10 @@ function buildSimulationPrompt(data) {
   const topTopics = data.topicFrequency.slice(0, 10)
   const favourites = data.topicFrequency
     .flatMap(t => t.subtypes.filter(s => s.isFavourite)
-      .map(s => `${t.topic} — ${s.sub_type} (${s.paperCount}/${examPapers.length} papers)`))
+      .map(s => `${t.topic} - ${s.sub_type} (${s.paperCount}/${examPapers.length} papers)`))
   const positions = data.positionPatterns
     .map(p => `${p.position}: ${p.topics.slice(0, 2).map(t => t.topic).join(' / ')}`)
 
-  // Use instructions from the most recent paper that has them
   const paperWithInstructions = examPapers
     .filter(p => p.instructions && p.instructions.length > 0)
     .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime())[0]
@@ -43,7 +42,7 @@ function buildSimulationPrompt(data) {
     ? Math.round(data.markPatterns.reduce((s, m) => s + m.totalMarks, 0) / data.positionPatterns.length)
     : 25
 
-  return `You are Atlas, an expert math exam simulator. Generate ONE complete simulated exam paper based on these detected patterns from ${examPapers.length} past exam papers.
+  return `You are Atlas, an expert math exam simulator. Generate ONE complete simulated exam paper based on these detected patterns from ${examPapers.length} past papers.
 
 DETECTED PAPER STRUCTURE:
 - Papers analysed: ${examPapers.map(p => p.name).join(', ')}
@@ -51,10 +50,10 @@ DETECTED PAPER STRUCTURE:
 - Marks per question: approximately ${avgMarksPerQ}
 - Question position patterns: ${positions.join(' | ')}
 
-TOPIC FREQUENCY (most examined first):
+TOPIC FREQUENCY:
 ${topTopics.map(t => `- ${t.topic}: ${t.count} questions across ${t.paperCount}/${examPapers.length} papers`).join('\n')}
 
-EXAMINER FAVOURITES (appear in multiple papers):
+EXAMINER FAVOURITES:
 ${favourites.slice(0, 12).join('\n') || 'Insufficient data'}
 
 ${hasMarks ? `MARK ALLOCATION PATTERNS:\n${data.markPatterns.slice(0, 8).map(m => `- ${m.topic}: avg ${m.avgMarks} marks per question`).join('\n')}` : ''}
@@ -62,18 +61,18 @@ ${hasMarks ? `MARK ALLOCATION PATTERNS:\n${data.markPatterns.slice(0, 8).map(m =
 INSTRUCTIONS FOR GENERATION:
 1. Generate exactly ${attemptQ} questions following the detected position patterns
 2. Each question must have exactly 3 lettered parts: (a), (b), (c)
-3. Each part may have sub-parts (i), (ii) where needed — keep sub-parts minimal, 1-2 per part maximum
-4. Assign realistic mark allocations matching the patterns — each question should total approximately ${avgMarksPerQ} marks
+3. Each part may have sub-parts (i), (ii) where needed - keep sub-parts minimal, 1-2 per part maximum
+4. Assign realistic mark allocations matching the patterns - each question should total approximately ${avgMarksPerQ} marks
 5. Follow the topic order detected in position patterns
 6. Use the examiner favourite sub-types as the specific question content
 7. Write questions at the appropriate difficulty for the course level detected
 8. Include realistic mathematical notation and specific values/functions
 
-Respond with ONLY a valid JSON object in exactly this format — no preamble, no explanation:
+Respond with ONLY a valid JSON object in exactly this format - no preamble, no explanation:
 {
   "title": "Simulated Exam Paper",
-  "subtitle": "Based on ${examPapers.length} past paper${examPapers.length !== 1 ? 's' : ''} — For practice only",
-  "instructions": ${realInstructions.length > 0 ? JSON.stringify(realInstructions) : '["Attempt any 5 questions", "Show all working clearly", "' + (calculatorsAllowed === false ? 'Calculators are NOT allowed' : calculatorsAllowed === true ? 'Calculators are permitted' : 'Check your paper for calculator policy') + '"]'},
+  "subtitle": "Based on ${examPapers.length} past paper${examPapers.length !== 1 ? 's' : ''} - For practice only",
+  "instructions": ${realInstructions.length > 0 ? JSON.stringify(realInstructions) : '["Attempt all questions", "Show all working clearly", "' + (calculatorsAllowed === false ? 'Calculators are NOT allowed' : calculatorsAllowed === true ? 'Calculators are permitted' : 'Check your paper for calculator policy') + '"]'},
   "timeMinutes": ${timeMinutes},
   "totalMarks": number,
   "questions": [
@@ -98,8 +97,6 @@ Respond with ONLY a valid JSON object in exactly this format — no preamble, no
 function renderQuestionText(text) {
   if (!text) return ''
 
-  // Split into segments — detect table blocks vs normal text
-  // Tables: lines that start and end with | and have multiple cells
   const lines = text.split('\n')
   const segments = []
   let tableLines = []
@@ -121,7 +118,6 @@ function renderQuestionText(text) {
 
   function isTableLine(line) {
     const trimmed = line.trim()
-    // Must start and end with | and have at least 2 pipe chars total
     const pipes = (trimmed.match(/\|/g) || []).length
     return trimmed.startsWith('|') && trimmed.endsWith('|') && pipes >= 3
   }
@@ -138,33 +134,23 @@ function renderQuestionText(text) {
   flushText()
   flushTable()
 
-  // Also handle inline tables on a single line
-  // e.g. "| x | 1 | 2 | | P(X=x) | 0.1 | k |"
-  const result = segments.map(seg => {
-    if (seg.type === 'table') {
-      return renderTable(seg.content)
-    }
-    // Check for inline table pattern in text
+  return segments.map(function (seg) {
+    if (seg.type === 'table') return renderTable(seg.content)
     const inlineTablePattern = /(\|(?:[^|\n]+\|){2,})/g
     if (inlineTablePattern.test(seg.content)) {
-      // Split text around inline table segments
       return seg.content.replace(
         /(\|(?:[^|\n]+\|){2,}(?:\s*\|(?:[^|\n]+\|){2,})*)/g,
-        match => renderTable(match)
+        function (match) { return renderTable(match) }
       )
     }
     return seg.content
   }).join('')
-
-  return result
 }
 
 function renderTable(tableText) {
   const rows = tableText.trim().split('\n').filter(r => r.trim())
   const isSeparator = r => /^\|[\s\-:|]+\|$/.test(r.trim())
   const parseRow = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
-
-  // Handle single-line table (all rows concatenated)
   const allRows = rows.length === 1
     ? tableText.trim().split(/\|\s*\|/).map(r => '|' + r + '|').filter(r => r.trim() !== '||')
     : rows
@@ -187,6 +173,20 @@ function renderTable(tableText) {
   return html
 }
 
+function formatDuration(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  return [hours, minutes, seconds]
+    .map(n => String(n).padStart(2, '0'))
+    .join(':')
+}
+
+function getQuestionLabel(question, index) {
+  return 'Q' + (question?.number || index + 1)
+}
+
 export default function SimulatePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -195,19 +195,30 @@ export default function SimulatePage() {
   const [patterns, setPatterns] = useState(null)
   const [exam, setExam] = useState(null)
   const [simulation, setSimulation] = useState(null)
+  const [answers, setAnswers] = useState({})
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
+  const [railCollapsed, setRailCollapsed] = useState(false)
+  const [now, setNow] = useState(Date.now())
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [view, setView] = useState('brief') // brief | exam
+  const saveTimersRef = useRef({})
 
   useEffect(function () {
     if (!user) return
-    if (simulationId) {
-      loadSimulation(simulationId)
-    } else {
-      loadPatterns()
-    }
+    if (simulationId) loadSimulation(simulationId)
+    else loadPatterns()
   }, [user, simulationId])
+
+  useEffect(function () {
+    if (simulation?.status !== 'in_progress') return
+    const timer = window.setInterval(function () {
+      setNow(Date.now())
+    }, 1000)
+    return function () { window.clearInterval(timer) }
+  }, [simulation?.status])
 
   async function loadSimulation(id) {
     setLoading(true)
@@ -221,14 +232,29 @@ export default function SimulatePage() {
         .single()
 
       if (error) throw error
+
       setSimulation(data)
       setPatterns(data.patterns_snapshot || null)
-      if (data.exam_json) {
-        setExam(data.exam_json)
-        setView('exam')
-      } else {
-        setView('brief')
+      setExam(data.exam_json || null)
+      setCurrentQuestionIndex(data.current_question_index || 0)
+
+      const { data: answerRows, error: answersError } = await supabase
+        .from('exam_simulation_answers')
+        .select('*')
+        .eq('simulation_id', id)
+        .eq('user_id', user.id)
+
+      if (answersError) throw answersError
+
+      const answerMap = {}
+      for (const row of answerRows || []) {
+        answerMap[row.question_index] = {
+          answer_text: row.answer_text || '',
+          flagged: row.flagged || false
+        }
       }
+      setAnswers(answerMap)
+
       if (data.status === 'failed') {
         setError(data.error || 'Simulation generation failed.')
       }
@@ -241,6 +267,7 @@ export default function SimulatePage() {
 
   async function loadPatterns() {
     setLoading(true)
+    setError('')
     try {
       const data = await getPatterns(user.id)
       if (data.confidence < 70) {
@@ -323,7 +350,6 @@ export default function SimulatePage() {
       if (updateError) throw updateError
       setSimulation(updated)
       setExam(examData)
-      setView('exam')
       navigate('/simulate/' + simulationRecord.id, { replace: true })
     } catch (e) {
       if (simulationRecord?.id) {
@@ -342,25 +368,199 @@ export default function SimulatePage() {
     }
   }
 
-  function handlePrint() {
-    window.print()
+  async function startExam() {
+    if (!simulation || !exam) return
+    setSaving(true)
+    setError('')
+    try {
+      const { data, error } = await supabase
+        .from('exam_simulations')
+        .update({
+          status: 'in_progress',
+          started_at: simulation.started_at || new Date().toISOString(),
+          current_question_index: 0
+        })
+        .eq('id', simulation.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (error) throw error
+      setSimulation(data)
+      setCurrentQuestionIndex(0)
+      setNow(Date.now())
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  if (loading) return (
-    <div className="page">
-      <p className="muted">Loading pattern data…</p>
-    </div>
-  )
+  async function saveAnswerRecord(index, answerState) {
+    if (!simulation || !user || simulation.status === 'submitted') return
+    const questions = exam?.questions || []
+    const question = questions[index]
+    setSaving(true)
+    try {
+      const { error } = await supabase
+        .from('exam_simulation_answers')
+        .upsert({
+          simulation_id: simulation.id,
+          user_id: user.id,
+          question_index: index,
+          question_number: question?.number ? String(question.number) : String(index + 1),
+          answer_text: answerState?.answer_text || '',
+          flagged: answerState?.flagged || false
+        }, { onConflict: 'simulation_id,question_index' })
 
-  if (error) return (
-    <div className="page">
-      <p className="error-text" style={{ marginBottom: '1rem' }}>{error}</p>
-      <button className="secondary" onClick={() => navigate('/patterns')}>← Back to Patterns</button>
-    </div>
-  )
+      if (error) throw error
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
-  // Brief view
-  if (view === 'brief' && patterns) {
+  function updateAnswer(index, value) {
+    const next = {
+      ...(answers[index] || { flagged: false }),
+      answer_text: value
+    }
+    setAnswers(prev => ({ ...prev, [index]: next }))
+    scheduleSave(index, next)
+  }
+
+  function scheduleSave(index, answerState) {
+    window.clearTimeout(saveTimersRef.current[index])
+    saveTimersRef.current[index] = window.setTimeout(function () {
+      saveAnswerRecord(index, answerState)
+    }, 800)
+  }
+
+  function flushAnswer(index) {
+    window.clearTimeout(saveTimersRef.current[index])
+    return saveAnswerRecord(index, answers[index] || { answer_text: '', flagged: false })
+  }
+
+  async function toggleFlag(index) {
+    const next = {
+      ...(answers[index] || { answer_text: '' }),
+      flagged: !(answers[index]?.flagged)
+    }
+    setAnswers(prev => ({ ...prev, [index]: next }))
+    await saveAnswerRecord(index, next)
+  }
+
+  async function goToQuestion(index) {
+    const questions = exam?.questions || []
+    if (index < 0 || index >= questions.length) return
+    await flushAnswer(currentQuestionIndex)
+    setCurrentQuestionIndex(index)
+    await supabase
+      .from('exam_simulations')
+      .update({ current_question_index: index })
+      .eq('id', simulation.id)
+      .eq('user_id', user.id)
+  }
+
+  async function submitExam() {
+    if (!simulation || !exam) return
+    const questions = exam.questions || []
+    const unanswered = questions.filter(function (_question, index) {
+      return !(answers[index]?.answer_text || '').trim()
+    }).length
+    const flagged = Object.values(answers).filter(answer => answer.flagged).length
+    const message = `Submit paper?\n\nUnanswered questions: ${unanswered}\nFlagged questions: ${flagged}\n\nAfter submitting, answers will be locked until marking is added.`
+    if (!window.confirm(message)) return
+
+    setSubmitting(true)
+    setError('')
+    try {
+      await flushAnswer(currentQuestionIndex)
+      const { data, error } = await supabase
+        .from('exam_simulations')
+        .update({
+          status: 'submitted',
+          submitted_at: new Date().toISOString()
+        })
+        .eq('id', simulation.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (error) throw error
+      setSimulation(data)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  function getRemainingMs() {
+    if (!simulation?.started_at || !exam?.timeMinutes) return 0
+    const end = new Date(simulation.started_at).getTime() + exam.timeMinutes * 60 * 1000
+    return Math.max(0, end - now)
+  }
+
+  function getAnsweredCount() {
+    return (exam?.questions || []).filter(function (_question, index) {
+      return (answers[index]?.answer_text || '').trim().length > 0
+    }).length
+  }
+
+  function renderQuestion(question) {
+    return (
+      <div>
+        <div className="row" style={{ marginBottom: '0.75rem', alignItems: 'baseline' }}>
+          <h2 style={{ marginBottom: 0 }}>Question {question.number}</h2>
+          <span className="spacer" />
+          {question.totalMarks && (
+            <span className="muted" style={{ fontSize: '0.85rem' }}>[{question.totalMarks} marks]</span>
+          )}
+        </div>
+        {(question.parts || []).map(function (part, pi) {
+          return (
+            <div key={pi} style={{ marginBottom: '1rem' }}>
+              <p style={{ fontSize: '0.95rem', marginBottom: '0.35rem' }}>
+                <strong>({part.label})</strong>{' '}
+                <span dangerouslySetInnerHTML={{ __html: renderQuestionText(part.text) }} />
+                {part.marks && !part.subparts?.length && (
+                  <span className="muted" style={{ marginLeft: '0.4rem', fontSize: '0.8rem' }}>[{part.marks}]</span>
+                )}
+              </p>
+              {(part.subparts || []).map(function (sub, si) {
+                return (
+                  <p key={si} style={{ fontSize: '0.9rem', paddingLeft: '1rem', marginBottom: '0.35rem' }}>
+                    <strong>{sub.label}.</strong>{' '}
+                    <span dangerouslySetInnerHTML={{ __html: renderQuestionText(sub.text) }} />
+                    {sub.marks && (
+                      <span className="muted" style={{ marginLeft: '0.4rem', fontSize: '0.8rem' }}>[{sub.marks}]</span>
+                    )}
+                  </p>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  if (loading) {
+    return <div className="page"><p className="muted">Loading pattern data...</p></div>
+  }
+
+  if (error) {
+    return (
+      <div className="page">
+        <p className="error-text" style={{ marginBottom: '1rem' }}>{error}</p>
+        <button className="secondary" onClick={() => navigate('/patterns')}>Back to Patterns</button>
+      </div>
+    )
+  }
+
+  if (!simulationId && patterns) {
     const examPapers = patterns.papers.filter(p => p.assessment_type === 'Past Exam')
     const topTopics = patterns.topicFrequency.slice(0, 6)
 
@@ -370,50 +570,29 @@ export default function SimulatePage() {
           <h1>Exam Simulator</h1>
           <span className="spacer" />
           <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/patterns')}>
-            ← Patterns
+            Patterns
           </button>
         </div>
 
         <p className="muted" style={{ marginBottom: '2rem', fontSize: '0.9rem' }}>
-          Atlas will generate a full simulated exam based on patterns detected from {examPapers.length} past paper{examPapers.length !== 1 ? 's' : ''}.
+          Atlas will generate and save a simulated exam based on patterns detected from {examPapers.length} past paper{examPapers.length !== 1 ? 's' : ''}.
         </p>
 
-        {/* Pattern summary */}
-        <div style={{
-          padding: '1.25rem',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          marginBottom: '1.5rem'
-        }}>
-          <p style={{
-            fontSize: '0.75rem', textTransform: 'uppercase',
-            letterSpacing: '0.08em', color: 'var(--fg-muted)', marginBottom: '0.75rem'
-          }}>
+        <div style={{ padding: '1.25rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-muted)', marginBottom: '0.75rem' }}>
             Based on
           </p>
           {examPapers.map(p => (
-            <p key={p.id} style={{ fontSize: '0.9rem', marginBottom: '0.2rem' }}>· {p.name}</p>
+            <p key={p.id} style={{ fontSize: '0.9rem', marginBottom: '0.2rem' }}>{p.name}</p>
           ))}
         </div>
 
-        <div style={{
-          padding: '1.25rem',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          marginBottom: '1.5rem'
-        }}>
-          <p style={{
-            fontSize: '0.75rem', textTransform: 'uppercase',
-            letterSpacing: '0.08em', color: 'var(--fg-muted)', marginBottom: '0.75rem'
-          }}>
+        <div style={{ padding: '1.25rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+          <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-muted)', marginBottom: '0.75rem' }}>
             Likely topics
           </p>
           {topTopics.map(t => (
-            <div key={t.topic} className="row" style={{
-              padding: '0.3rem 0',
-              borderBottom: '1px solid var(--border)',
-              fontSize: '0.85rem'
-            }}>
+            <div key={t.topic} className="row" style={{ padding: '0.3rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.85rem' }}>
               <span>{t.topic}</span>
               <span className="spacer" />
               <span className="muted">{t.paperCount}/{examPapers.length} papers</span>
@@ -421,160 +600,203 @@ export default function SimulatePage() {
           ))}
         </div>
 
-        <div style={{
-          padding: '1rem',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          marginBottom: '2rem',
-          fontSize: '0.85rem',
-          color: 'var(--fg-muted)'
-        }}>
-          ⚠ This simulation is for practice only. It is not a prediction of your actual exam.
-          Questions are generated based on historical patterns and may not reflect the exact format of future papers.
-        </div>
-
-        <button
-          className="primary"
-          onClick={generateExam}
-          disabled={generating}
-          style={{ width: '100%', padding: '0.75rem' }}
-        >
-          {generating ? 'Atlas is generating your exam…' : 'Generate simulated exam'}
+        <button className="primary" onClick={generateExam} disabled={generating} style={{ width: '100%', padding: '0.75rem' }}>
+          {generating ? 'Atlas is generating your exam...' : 'Generate simulated exam'}
         </button>
       </div>
     )
   }
 
-  // Exam view
-  if (view === 'exam' && exam) {
+  if (!exam) {
     return (
-      <>
-        {/* Screen controls — hidden on print */}
-        <div className="no-print" style={{
-          position: 'fixed', top: 0, left: 0, right: 0,
-          background: 'var(--bg)',
-          borderBottom: '1px solid var(--border)',
-          padding: '0.75rem 1.5rem',
-          display: 'flex', gap: '0.75rem', alignItems: 'center',
-          zIndex: 100
-        }}>
-          <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Simulated Exam</span>
-          <span className="spacer" />
-          <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/simulate') }>
-            New simulation
-          </button>
-          <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/patterns')}>
-            ← Patterns
-          </button>
-          <button className="primary" style={{ fontSize: '0.85rem' }} onClick={handlePrint}>
-            Print / Save PDF
-          </button>
-        </div>
-
-        {/* Exam paper */}
-        <div className="exam-paper" style={{
-          maxWidth: '680px',
-          margin: '0 auto',
-          padding: '5rem 2rem 4rem',
-          fontFamily: 'Georgia, serif'
-        }}>
-          {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '2rem', borderBottom: '2px solid var(--fg)', paddingBottom: '1rem' }}>
-            <p style={{ fontSize: '0.85rem', marginBottom: '0.25rem', color: 'var(--fg-muted)' }}>Solvd · Practice Paper</p>
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '0.25rem' }}>{exam.title}</h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--fg-muted)' }}>{exam.subtitle}</p>
-            {exam.timeMinutes && (
-              <p style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                Time Allowed: {Math.floor(exam.timeMinutes / 60)} hour{Math.floor(exam.timeMinutes / 60) !== 1 ? 's' : ''}
-                {exam.timeMinutes % 60 > 0 ? ` ${exam.timeMinutes % 60} minutes` : ''}
-              </p>
-            )}
-          </div>
-
-          {/* Instructions */}
-          {exam.instructions && exam.instructions.length > 0 && (
-            <div style={{ marginBottom: '2rem' }}>
-              <p style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>Instructions:</p>
-              {exam.instructions.map((inst, i) => (
-                <p key={i} style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>{i + 1}. {inst}</p>
-              ))}
-            </div>
-          )}
-
-          <hr style={{ borderColor: 'var(--border)', marginBottom: '2rem' }} />
-
-          {/* Questions */}
-          {(exam.questions || []).map((q, qi) => (
-            <div key={qi} style={{ marginBottom: '2.5rem' }}>
-              <div className="row" style={{ marginBottom: '0.75rem' }}>
-                <p style={{ fontWeight: 'bold', fontSize: '1rem' }}>Question {q.number}.</p>
-                <span className="spacer" />
-                {q.totalMarks && (
-                  <p style={{ fontSize: '0.85rem', color: 'var(--fg-muted)' }}>[{q.totalMarks} marks]</p>
-                )}
-              </div>
-
-              {(q.parts || []).map((part, pi) => (
-                <div key={pi} style={{ marginBottom: '1rem', paddingLeft: '1rem' }}>
-                  <div className="row" style={{ marginBottom: '0.4rem', alignItems: 'flex-start' }}>
-                    <p style={{ fontSize: '0.95rem', flex: 1 }}>
-                      <strong>({part.label})</strong>{' '}
-                      <span dangerouslySetInnerHTML={{ __html: renderQuestionText(part.text) }} />
-                    </p>
-                    {part.marks && !part.subparts?.length && (
-                      <span style={{ fontSize: '0.8rem', color: 'var(--fg-muted)', marginLeft: '1rem', whiteSpace: 'nowrap' }}>
-                        [{part.marks}]
-                      </span>
-                    )}
-                  </div>
-
-                  {(part.subparts || []).map((sub, si) => (
-                    <div key={si} className="row" style={{
-                      paddingLeft: '1.5rem',
-                      marginBottom: '0.4rem',
-                      alignItems: 'flex-start'
-                    }}>
-                      <p style={{ fontSize: '0.9rem', flex: 1 }}>
-                        <strong>{sub.label}.</strong>{' '}
-                        <span dangerouslySetInnerHTML={{ __html: renderQuestionText(sub.text) }} />
-                      </p>
-                      {sub.marks && (
-                        <span style={{ fontSize: '0.8rem', color: 'var(--fg-muted)', marginLeft: '1rem', whiteSpace: 'nowrap' }}>
-                          [{sub.marks}]
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ))}
-
-          {/* Footer */}
-          <div style={{
-            marginTop: '3rem',
-            paddingTop: '1rem',
-            borderTop: '1px solid var(--border)',
-            textAlign: 'center',
-            fontSize: '0.75rem',
-            color: 'var(--fg-muted)'
-          }}>
-            Generated by Solvd · solvd.trymyapp.uk · For practice only — not a prediction
-          </div>
-        </div>
-
-        {/* Print styles */}
-        <style>{`
-          @media print {
-            .no-print { display: none !important; }
-            body { background: white !important; color: black !important; }
-            .exam-paper { padding: 2rem !important; max-width: 100% !important; }
-          }
-        `}</style>
-      </>
+      <div className="page">
+        <p className="muted">No saved exam found.</p>
+        <button className="secondary" onClick={() => navigate('/patterns')}>Back to Patterns</button>
+      </div>
     )
   }
 
-  return null
-}
+  const questions = exam.questions || []
+  const currentQuestion = questions[currentQuestionIndex] || questions[0]
+  const currentAnswer = answers[currentQuestionIndex] || { answer_text: '', flagged: false }
+  const remainingMs = getRemainingMs()
+  const answeredCount = getAnsweredCount()
+  const isSubmitted = simulation?.status === 'submitted' || simulation?.status === 'marked'
+  const isInProgress = simulation?.status === 'in_progress'
 
+  if (simulation?.status === 'generated') {
+    return (
+      <div className="page">
+        <div className="row" style={{ marginBottom: '1.5rem' }}>
+          <h1>{exam.title || 'Simulated Exam'}</h1>
+          <span className="spacer" />
+          <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/patterns')}>Patterns</button>
+        </div>
+
+        <p className="muted" style={{ marginBottom: '2rem' }}>
+          This is pressure practice. Once you start, hints stay off and your work is saved as an exam attempt.
+        </p>
+
+        <div style={{ padding: '1.25rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+          <div className="row" style={{ gap: '2rem', flexWrap: 'wrap' }}>
+            <div>
+              <p style={{ fontSize: '1.4rem', lineHeight: 1 }}>{exam.timeMinutes || 180}m</p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Time allowed</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '1.4rem', lineHeight: 1 }}>{questions.length}</p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Questions</p>
+            </div>
+            <div>
+              <p style={{ fontSize: '1.4rem', lineHeight: 1 }}>{exam.totalMarks || '-'}</p>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Marks</p>
+            </div>
+          </div>
+        </div>
+
+        {exam.instructions?.length > 0 && (
+          <div style={{ marginBottom: '2rem' }}>
+            <h2>Instructions</h2>
+            {exam.instructions.map((inst, i) => (
+              <p key={i} className="muted" style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>{i + 1}. {inst}</p>
+            ))}
+          </div>
+        )}
+
+        <button className="primary" onClick={startExam} disabled={saving} style={{ width: '100%', padding: '0.75rem' }}>
+          {saving ? 'Starting...' : 'Start exam'}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{
+      maxWidth: railCollapsed ? '760px' : '980px',
+      margin: '0 auto',
+      padding: '2rem 1.5rem 4rem',
+      display: 'grid',
+      gridTemplateColumns: railCollapsed ? '1fr 44px' : 'minmax(0, 1fr) 220px',
+      gap: '1rem'
+    }}>
+      <main>
+        <div className="row" style={{ marginBottom: '1.5rem' }}>
+          <div>
+            <h1 style={{ marginBottom: '0.15rem' }}>Simulated Exam</h1>
+            <p className="muted" style={{ fontSize: '0.85rem' }}>
+              Question {currentQuestionIndex + 1} of {questions.length}
+              {saving && <span> - Saving...</span>}
+            </p>
+          </div>
+          <span className="spacer" />
+          <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/patterns')}>Patterns</button>
+        </div>
+
+        {isSubmitted && (
+          <div style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+            <p style={{ marginBottom: '0.25rem', fontWeight: 'bold' }}>Paper submitted</p>
+            <p className="muted" style={{ fontSize: '0.85rem', marginBottom: 0 }}>
+              Marking and feedback will be added in the next phase.
+            </p>
+          </div>
+        )}
+
+        <div style={{ paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
+          {currentQuestion && renderQuestion(currentQuestion)}
+        </div>
+
+        <label className="label" htmlFor="exam-answer">Answer</label>
+        <textarea
+          id="exam-answer"
+          value={currentAnswer.answer_text}
+          onChange={function (e) { updateAnswer(currentQuestionIndex, e.target.value) }}
+          onBlur={function () { flushAnswer(currentQuestionIndex) }}
+          disabled={isSubmitted}
+          rows={10}
+          placeholder="Write your working here..."
+          style={{ marginBottom: '1rem' }}
+        />
+
+        <div className="row" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button
+            className={currentAnswer.flagged ? 'primary' : 'secondary'}
+            onClick={function () { toggleFlag(currentQuestionIndex) }}
+            disabled={isSubmitted}
+          >
+            {currentAnswer.flagged ? 'Flagged' : 'Flag'}
+          </button>
+          <span className="spacer" />
+          <button className="secondary" onClick={function () { goToQuestion(currentQuestionIndex - 1) }} disabled={currentQuestionIndex === 0}>
+            Previous
+          </button>
+          <button className="primary" onClick={function () { goToQuestion(currentQuestionIndex + 1) }} disabled={currentQuestionIndex >= questions.length - 1}>
+            Next
+          </button>
+        </div>
+      </main>
+
+      <aside style={{
+        borderLeft: '1px solid var(--border)',
+        paddingLeft: railCollapsed ? '0.5rem' : '1rem',
+        minHeight: '70vh'
+      }}>
+        {railCollapsed ? (
+          <button className="secondary" style={{ width: '100%', padding: '0.4rem', minHeight: 'unset' }} onClick={() => setRailCollapsed(false)}>
+            {answeredCount}/{questions.length}
+          </button>
+        ) : (
+          <div>
+            <div className="row" style={{ marginBottom: '1rem' }}>
+              <div>
+                <p style={{ marginBottom: '0.1rem', fontWeight: 'bold' }}>
+                  {isInProgress ? formatDuration(remainingMs) : 'Submitted'}
+                </p>
+                <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
+                  {answeredCount}/{questions.length} answered
+                </p>
+              </div>
+              <span className="spacer" />
+              <button className="ghost" style={{ fontSize: '0.78rem' }} onClick={() => setRailCollapsed(true)}>Collapse</button>
+            </div>
+
+            <div style={{ marginBottom: '1.25rem' }}>
+              {questions.map(function (question, index) {
+                const answer = answers[index] || {}
+                const active = index === currentQuestionIndex
+                const answered = (answer.answer_text || '').trim().length > 0
+                return (
+                  <button
+                    key={index}
+                    className={active ? 'primary' : 'secondary'}
+                    onClick={function () { goToQuestion(index) }}
+                    style={{
+                      width: '100%',
+                      minHeight: 'unset',
+                      padding: '0.35rem 0.5rem',
+                      marginBottom: '0.35rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.8rem'
+                    }}
+                  >
+                    <span>{getQuestionLabel(question, index)}</span>
+                    <span>{answer.flagged ? 'Flag' : answered ? 'Done' : 'Empty'}</span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <button
+              className="primary"
+              onClick={submitExam}
+              disabled={isSubmitted || submitting}
+              style={{ width: '100%', fontSize: '0.85rem' }}
+            >
+              {submitting ? 'Submitting...' : isSubmitted ? 'Submitted' : 'Submit paper'}
+            </button>
+          </div>
+        )}
+      </aside>
+    </div>
+  )
+}
