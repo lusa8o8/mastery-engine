@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getPatterns } from '../utils/getPatterns'
 import { supabase } from '../api/supabase'
+
+const EXAM_MODEL = 'claude-sonnet-4-6'
+const EXAM_PROMPT_VERSION = 'exam_simulator_v1'
 
 function buildSimulationPrompt(data) {
   const examPapers = data.papers.filter(p => p.assessment_type === 'Past Exam')
@@ -187,9 +190,11 @@ function renderTable(tableText) {
 export default function SimulatePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const { simulationId } = useParams()
 
   const [patterns, setPatterns] = useState(null)
   const [exam, setExam] = useState(null)
+  const [simulation, setSimulation] = useState(null)
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
@@ -197,8 +202,42 @@ export default function SimulatePage() {
 
   useEffect(function () {
     if (!user) return
-    loadPatterns()
-  }, [user])
+    if (simulationId) {
+      loadSimulation(simulationId)
+    } else {
+      loadPatterns()
+    }
+  }, [user, simulationId])
+
+  async function loadSimulation(id) {
+    setLoading(true)
+    setError('')
+    try {
+      const { data, error } = await supabase
+        .from('exam_simulations')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single()
+
+      if (error) throw error
+      setSimulation(data)
+      setPatterns(data.patterns_snapshot || null)
+      if (data.exam_json) {
+        setExam(data.exam_json)
+        setView('exam')
+      } else {
+        setView('brief')
+      }
+      if (data.status === 'failed') {
+        setError(data.error || 'Simulation generation failed.')
+      }
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function loadPatterns() {
     setLoading(true)
@@ -221,7 +260,27 @@ export default function SimulatePage() {
     setGenerating(true)
     setError('')
 
+    let simulationRecord = null
+
     try {
+      const { data: created, error: createError } = await supabase
+        .from('exam_simulations')
+        .insert({
+          user_id: user.id,
+          status: 'generating',
+          source: 'pattern_generated',
+          confidence_at_creation: patterns.confidence,
+          patterns_snapshot: patterns,
+          model: EXAM_MODEL,
+          prompt_version: EXAM_PROMPT_VERSION
+        })
+        .select()
+        .single()
+
+      if (createError) throw createError
+      simulationRecord = created
+      setSimulation(created)
+
       const prompt = buildSimulationPrompt(patterns)
       const { data: { session } } = await supabase.auth.getSession()
 
@@ -248,9 +307,35 @@ export default function SimulatePage() {
 
       const raw = result.text.replace(/```json|```/g, '').trim()
       const examData = JSON.parse(raw)
+
+      const { data: updated, error: updateError } = await supabase
+        .from('exam_simulations')
+        .update({
+          status: 'generated',
+          exam_json: examData,
+          error: null
+        })
+        .eq('id', simulationRecord.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (updateError) throw updateError
+      setSimulation(updated)
       setExam(examData)
       setView('exam')
+      navigate('/simulate/' + simulationRecord.id, { replace: true })
     } catch (e) {
+      if (simulationRecord?.id) {
+        await supabase
+          .from('exam_simulations')
+          .update({
+            status: 'failed',
+            error: e.message
+          })
+          .eq('id', simulationRecord.id)
+          .eq('user_id', user.id)
+      }
       setError('Failed to generate exam: ' + e.message)
     } finally {
       setGenerating(false)
@@ -375,8 +460,8 @@ export default function SimulatePage() {
         }}>
           <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Simulated Exam</span>
           <span className="spacer" />
-          <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => { setView('brief'); setExam(null) }}>
-            Regenerate
+          <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/simulate') }>
+            New simulation
           </button>
           <button className="secondary" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/patterns')}>
             ← Patterns
@@ -492,5 +577,4 @@ export default function SimulatePage() {
 
   return null
 }
-
 

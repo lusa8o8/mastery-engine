@@ -82,6 +82,7 @@ export default function PatternsPage() {
   const [narrative, setNarrative] = useState('')
   const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
+  const [latestSimulation, setLatestSimulation] = useState(null)
 
   useEffect(function () {
     if (!user) return
@@ -94,10 +95,28 @@ export default function PatternsPage() {
     try {
       const result = await getPatterns(user.id)
       setData(result)
+      loadLatestSimulation()
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadLatestSimulation() {
+    try {
+      const { data: simulation } = await supabase
+        .from('exam_simulations')
+        .select('id, status, created_at')
+        .eq('user_id', user.id)
+        .in('status', ['generated', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      setLatestSimulation(simulation || null)
+    } catch {
+      setLatestSimulation(null)
     }
   }
 
@@ -462,9 +481,18 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
               className="primary"
               disabled={data.confidence < 70}
               onClick={() => navigate('/simulate')}
+              style={{ marginRight: latestSimulation ? '0.75rem' : 0 }}
             >
               {data.confidence >= 70 ? 'Simulate exam →' : `Locked — ${70 - data.confidence}% more needed`}
             </button>
+            {latestSimulation && (
+              <button
+                className="secondary"
+                onClick={() => navigate('/simulate/' + latestSimulation.id)}
+              >
+                Continue saved simulation
+              </button>
+            )}
           </div>
         </div>
       )}

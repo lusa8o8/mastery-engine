@@ -29,6 +29,7 @@ export default function App() {
         <Route path="/vault" element={<ProtectedRoute><VaultPage /></ProtectedRoute>} />
         <Route path="/patterns" element={<ProtectedRoute><PatternsPage /></ProtectedRoute>} />
         <Route path="/simulate" element={<ProtectedRoute><SimulatePage /></ProtectedRoute>} />
+        <Route path="/simulate/:simulationId" element={<ProtectedRoute><SimulatePage /></ProtectedRoute>} />
         <Route path="/engine/:topic" element={<ProtectedRoute><EnginePage /></ProtectedRoute>} />
         <Route path="/summary" element={<ProtectedRoute><SummaryPage /></ProtectedRoute>} />
         <Route path="/progress" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
