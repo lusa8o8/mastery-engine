@@ -719,6 +719,9 @@ export default function SimulatePage() {
         </div>
 
         <label className="label" htmlFor="exam-answer">Answer</label>
+        <p className="muted" style={{ fontSize: '0.82rem', marginBottom: '0.5rem' }}>
+          Enter your final answer. For graphs or sketches, list the key features such as intercepts, turning points, asymptotes, domain, and range.
+        </p>
         <textarea
           id="exam-answer"
           value={currentAnswer.answer_text}
