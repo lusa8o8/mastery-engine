@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getPatterns } from '../utils/getPatterns'
-import { getUserSimulatorQuota } from '../utils/simulatorQuotas'
+import { formatQuotaResetDate, getUserSimulatorQuotaStatus } from '../utils/simulatorQuotas'
 import { supabase } from '../api/supabase'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -145,7 +145,7 @@ export default function PatternsPage() {
 
   async function loadQuota() {
     try {
-      const nextQuota = await getUserSimulatorQuota(user.id)
+      const nextQuota = await getUserSimulatorQuotaStatus(user.id)
       setQuota(nextQuota)
     } catch {
       setQuota(null)
@@ -235,6 +235,8 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
   )
 
   const examPapers = data?.papers.filter(p => p.assessment_type === 'Past Exam') || []
+  const simulationQuotaUsed = quota && quota.remainingGenerations <= 0
+  const simulationLocked = data?.confidence < 70 || simulationQuotaUsed
 
   return (
     <div className="page">
@@ -511,15 +513,22 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
             </p>
             {quota && (
               <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.75rem' }}>
-                {quota.label}: {quota.generatedPapersPerMonth} generation{quota.generatedPapersPerMonth === 1 ? '' : 's'} / month, {quota.markedAttemptsPerMonth} marked attempt{quota.markedAttemptsPerMonth === 1 ? '' : 's'} / month, {quota.storedPapers} saved paper{quota.storedPapers === 1 ? '' : 's'}.
+                Current plan: {quota.generatedPapersPerMonth} Exam Simulation{quota.generatedPapersPerMonth === 1 ? '' : 's'} / Month.{' '}
+                {quota.remainingGenerations > 0
+                  ? `${quota.remainingGenerations} remaining.`
+                  : `Refreshes ${formatQuotaResetDate(quota.nextResetDate)}.`}
               </p>
             )}
             <button
               className="primary"
-              disabled={data.confidence < 70}
+              disabled={simulationLocked}
               onClick={() => navigate('/simulate')}
             >
-              {data.confidence >= 70 ? 'Simulate exam →' : `Locked — ${70 - data.confidence}% more needed`}
+              {data.confidence < 70
+                ? `Locked — ${70 - data.confidence}% more needed`
+                : simulationQuotaUsed
+                ? 'Simulation limit reached'
+                : 'Simulate exam →'}
             </button>
             {simulations.length > 0 && (
               <div style={{ marginTop: '1.25rem' }}>

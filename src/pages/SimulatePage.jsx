@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getPatterns } from '../utils/getPatterns'
-import { getUserSimulatorQuota } from '../utils/simulatorQuotas'
+import { getQuotaWindowStartIso, getUserSimulatorQuota } from '../utils/simulatorQuotas'
 import { supabase } from '../api/supabase'
 
 const EXAM_MODEL = 'claude-sonnet-4-6'
@@ -274,11 +274,6 @@ function getResultTone(correctness) {
   return 'Not markable'
 }
 
-function getMonthStartIso() {
-  const now = new Date()
-  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-}
-
 export default function SimulatePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -490,7 +485,7 @@ export default function SimulatePage() {
 
   async function assertGenerationQuota() {
     const activeQuota = quota || await getUserSimulatorQuota(user.id)
-    const monthStart = getMonthStartIso()
+    const windowStart = getQuotaWindowStartIso()
     const activeStatuses = ['generated', 'in_progress', 'submitted', 'marking', 'marked', 'marking_failed']
 
     const { count: storedCount, error: storedError } = await supabase
@@ -504,27 +499,27 @@ export default function SimulatePage() {
       throw new Error(`${activeQuota.label} includes ${activeQuota.storedPapers} saved simulator paper${activeQuota.storedPapers === 1 ? '' : 's'}. Review an existing paper before generating another.`)
     }
 
-    const { count: monthlyCount, error: monthlyError } = await supabase
+    const { count: generationCount, error: generationError } = await supabase
       .from('exam_simulations')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .gte('created_at', monthStart)
+      .gte('created_at', windowStart)
       .neq('status', 'failed')
 
-    if (monthlyError) throw monthlyError
-    if ((monthlyCount || 0) >= activeQuota.generatedPapersPerMonth) {
-      throw new Error(`${activeQuota.label} includes ${activeQuota.generatedPapersPerMonth} generated paper${activeQuota.generatedPapersPerMonth === 1 ? '' : 's'} per month.`)
+    if (generationError) throw generationError
+    if ((generationCount || 0) >= activeQuota.generatedPapersPerMonth) {
+      throw new Error(`Current plan includes ${activeQuota.generatedPapersPerMonth} Exam Simulation${activeQuota.generatedPapersPerMonth === 1 ? '' : 's'} every 30 days.`)
     }
   }
 
   async function hasMarkingQuota() {
     const activeQuota = quota || await getUserSimulatorQuota(user.id)
-    const monthStart = getMonthStartIso()
+    const windowStart = getQuotaWindowStartIso()
     const { count, error } = await supabase
       .from('exam_simulations')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .gte('submitted_at', monthStart)
+      .gte('submitted_at', windowStart)
       .in('status', ['marking', 'marked', 'marking_failed'])
 
     if (error) throw error
@@ -655,7 +650,7 @@ export default function SimulatePage() {
           submitted_at: simulation.submitted_at || new Date().toISOString(),
           marking_model: EXAM_MARKING_MODEL,
           marking_prompt_version: EXAM_MARKING_PROMPT_VERSION,
-          marking_error: canMark ? null : `Your plan's monthly marking limit has been reached. This attempt is saved, but Atlas will not mark it this month.`
+          marking_error: canMark ? null : `Your plan's 30-day marking limit has been reached. This attempt is saved, but Atlas will not mark it yet.`
         })
         .eq('id', simulation.id)
         .eq('user_id', user.id)
@@ -681,7 +676,7 @@ export default function SimulatePage() {
     try {
       const canMark = await hasMarkingQuota()
       if (!canMark) {
-        throw new Error(`Your plan's monthly marking limit has been reached. You can review this attempt, but Atlas cannot mark more papers this month.`)
+        throw new Error(`Your plan's 30-day marking limit has been reached. You can review this attempt, but Atlas cannot mark more papers yet.`)
       }
       const { data, error } = await supabase
         .from('exam_simulations')
@@ -978,7 +973,7 @@ export default function SimulatePage() {
 
         {quota && (
           <p className="muted" style={{ marginBottom: '1rem', fontSize: '0.82rem' }}>
-            {quota.label} simulator limits: {quota.generatedPapersPerMonth} generation{quota.generatedPapersPerMonth === 1 ? '' : 's'} / month, {quota.markedAttemptsPerMonth} marked attempt{quota.markedAttemptsPerMonth === 1 ? '' : 's'} / month, {quota.storedPapers} saved paper{quota.storedPapers === 1 ? '' : 's'}.
+            Current plan: {quota.generatedPapersPerMonth} Exam Simulation{quota.generatedPapersPerMonth === 1 ? '' : 's'} / Month.
           </p>
         )}
 
