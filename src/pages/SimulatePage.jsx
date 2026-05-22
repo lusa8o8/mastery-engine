@@ -290,6 +290,7 @@ export default function SimulatePage() {
   const [generating, setGenerating] = useState(false)
   const [saving, setSaving] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false)
   const [error, setError] = useState('')
   const saveTimersRef = useRef({})
 
@@ -564,19 +565,26 @@ export default function SimulatePage() {
       .eq('user_id', user.id)
   }
 
-  async function submitExam() {
-    if (!simulation || !exam) return
-    const questions = exam.questions || []
+  function getSubmitCounts() {
+    const questions = exam?.questions || []
     const unanswered = questions.filter(function (_question, index) {
       return !(answers[index]?.answer_text || '').trim()
     }).length
     const flagged = Object.values(answers).filter(answer => answer.flagged).length
-    const message = `Submit paper?\n\nUnanswered questions: ${unanswered}\nFlagged questions: ${flagged}\n\nAfter submitting, answers will be locked until marking is added.`
-    if (!window.confirm(message)) return
+    return { unanswered, flagged }
+  }
 
+  function requestSubmitExam() {
+    if (!simulation || !exam) return
+    setSubmitDialogOpen(true)
+  }
+
+  async function confirmSubmitExam() {
+    if (!simulation || !exam) return
     setSubmitting(true)
     setError('')
     try {
+      setSubmitDialogOpen(false)
       await flushAnswer(currentQuestionIndex)
       const { data, error } = await supabase
         .from('exam_simulations')
@@ -944,6 +952,7 @@ export default function SimulatePage() {
   const currentResult = markingResults[currentQuestionIndex]
   const remainingMs = getRemainingMs()
   const answeredCount = getAnsweredCount()
+  const submitCounts = getSubmitCounts()
   const isAttemptLocked = ['submitted', 'marking', 'marked', 'marking_failed'].includes(simulation?.status)
   const isInProgress = simulation?.status === 'in_progress'
 
@@ -1016,6 +1025,57 @@ export default function SimulatePage() {
       gap: '1rem'
     }}>
       <main>
+        {submitDialogOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="submit-exam-title"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0, 0, 0, 0.55)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1.5rem'
+            }}
+          >
+            <div style={{
+              width: 'min(100%, 420px)',
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius)',
+              padding: '1.25rem'
+            }}>
+              <p id="submit-exam-title" style={{ fontWeight: 'bold', marginBottom: '0.65rem' }}>Submit paper?</p>
+              <p className="muted" style={{ fontSize: '0.9rem', marginBottom: '1rem' }}>
+                Your answers will lock and Atlas will mark the full paper.
+              </p>
+              <div style={{ borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)', padding: '0.75rem 0', marginBottom: '1rem' }}>
+                <div className="row" style={{ marginBottom: '0.35rem' }}>
+                  <span className="muted" style={{ fontSize: '0.85rem' }}>Unanswered questions</span>
+                  <span className="spacer" />
+                  <span>{submitCounts.unanswered}</span>
+                </div>
+                <div className="row">
+                  <span className="muted" style={{ fontSize: '0.85rem' }}>Flagged questions</span>
+                  <span className="spacer" />
+                  <span>{submitCounts.flagged}</span>
+                </div>
+              </div>
+              <div className="row" style={{ gap: '0.75rem' }}>
+                <button className="secondary" onClick={() => setSubmitDialogOpen(false)} disabled={submitting} style={{ flex: 1 }}>
+                  Cancel
+                </button>
+                <button className="primary" onClick={confirmSubmitExam} disabled={submitting} style={{ flex: 1 }}>
+                  {submitting ? 'Submitting...' : 'Submit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="row" style={{ marginBottom: '1.5rem' }}>
           <div>
             <h1 style={{ marginBottom: '0.15rem' }}>Simulated Exam</h1>
@@ -1155,7 +1215,7 @@ export default function SimulatePage() {
 
             <button
               className="primary"
-              onClick={submitExam}
+              onClick={requestSubmitExam}
               disabled={isAttemptLocked || submitting}
               style={{ width: '100%', fontSize: '0.85rem' }}
             >
