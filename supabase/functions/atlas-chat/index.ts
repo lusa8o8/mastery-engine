@@ -81,6 +81,8 @@ const RENDER_VIZ_TOOL = {
   }
 }
 
+const SONNET_CONTEXTS = ['exam_simulation', 'exam_marking']
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -98,6 +100,8 @@ serve(async (req) => {
       })
     }
 
+    const usesSonnet = SONNET_CONTEXTS.includes(body.context)
+
     const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -107,7 +111,7 @@ serve(async (req) => {
         'anthropic-beta': 'prompt-caching-2024-07-31'
       },
       body: JSON.stringify({
-        model: body.context === 'exam_simulation'
+        model: usesSonnet
           ? 'claude-sonnet-4-6'
           : 'claude-haiku-4-5-20251001',
         max_tokens: body.maxTokens || 2048,
@@ -119,7 +123,7 @@ serve(async (req) => {
           }
         ],
         messages,
-        ...(body.context !== 'exam_simulation' ? {
+        ...(!usesSonnet ? {
           tools: [RENDER_VIZ_TOOL],
           tool_choice: { type: 'auto' }
         } : {})
@@ -157,7 +161,7 @@ serve(async (req) => {
         session_id: sessionId,
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
-        model: body.context === 'exam_simulation' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001',
+        model: usesSonnet ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001',
         context: context || 'engine'
       })
     }

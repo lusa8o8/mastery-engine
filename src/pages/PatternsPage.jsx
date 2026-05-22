@@ -109,7 +109,7 @@ export default function PatternsPage() {
         .from('exam_simulations')
         .select('id, status, created_at')
         .eq('user_id', user.id)
-        .in('status', ['generated', 'in_progress'])
+        .in('status', ['generated', 'in_progress', 'submitted', 'marking', 'marked', 'marking_failed'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()

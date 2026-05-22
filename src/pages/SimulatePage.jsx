@@ -6,6 +6,8 @@ import { supabase } from '../api/supabase'
 
 const EXAM_MODEL = 'claude-sonnet-4-6'
 const EXAM_PROMPT_VERSION = 'exam_simulator_v1'
+const EXAM_MARKING_MODEL = 'claude-sonnet-4-6'
+const EXAM_MARKING_PROMPT_VERSION = 'exam_answer_only_marking_v1'
 
 function buildSimulationPrompt(data) {
   const examPapers = data.papers.filter(p => p.assessment_type === 'Past Exam')
@@ -92,6 +94,69 @@ Respond with ONLY a valid JSON object in exactly this format - no preamble, no e
     }
   ]
 }`
+}
+
+function buildMarkingPrompt({ exam, answers }) {
+  const questions = exam?.questions || []
+  const payload = {
+    exam: {
+      title: exam?.title || 'Simulated Exam Paper',
+      totalMarks: exam?.totalMarks || null,
+      timeMinutes: exam?.timeMinutes || null
+    },
+    questions: questions.map(function (question, index) {
+      const answer = answers[index] || {}
+      return {
+        question_index: index,
+        question_number: String(question.number || index + 1),
+        marks_available: question.totalMarks || null,
+        question: question,
+        student_answer: answer.answer_text || ''
+      }
+    })
+  }
+
+  return `You are Atlas, marking a submitted math exam attempt using answer-only evidence.
+
+IMPORTANT MARKING RULES:
+- This is V1 answer-only marking. Do not assume unstated working.
+- Award marks for final answers, key facts, and graph/sketch features the student typed.
+- If a question requires a drawing, mark typed key features such as intercepts, turning points, asymptotes, domain, and range.
+- Infer the expected answer from the question text and mark allocation.
+- If the answer is blank, award 0 and use error_type "incomplete_answer".
+- If the response cannot be marked fairly from typed evidence, use correctness "not_markable" and error_type "not_markable".
+- Be conservative. This is an estimated mark, not an official grade.
+
+Return ONLY valid JSON in this exact shape:
+{
+  "summary": {
+    "marks_awarded": number,
+    "marks_available": number,
+    "estimated_percentage": number,
+    "overall_feedback": "brief performance diagnosis",
+    "top_weaknesses": ["weakness"],
+    "recommended_mastery_topics": ["topic"]
+  },
+  "results": [
+    {
+      "question_index": number,
+      "question_number": "1",
+      "topic": "topic or null",
+      "sub_topic": "sub-topic or null",
+      "marks_awarded": number,
+      "marks_available": number,
+      "correctness": "correct|partially_correct|incorrect|not_markable",
+      "error_type": "none|concept_gap|method_gap|algebra_error|notation_error|incomplete_answer|misread_question|time_pressure|exam_technique|not_markable",
+      "confidence": number,
+      "feedback_summary": "short explanation",
+      "lost_mark_reasons": ["reason"],
+      "recommended_mastery_topics": ["topic"]
+    }
+  ]
+}
+
+Submitted attempt:
+${JSON.stringify(payload)}`
 }
 
 function renderQuestionText(text) {
@@ -397,7 +462,7 @@ export default function SimulatePage() {
   }
 
   async function saveAnswerRecord(index, answerState) {
-    if (!simulation || !user || simulation.status === 'submitted') return
+    if (!simulation || !user || ['submitted', 'marking', 'marked', 'marking_failed'].includes(simulation.status)) return
     const questions = exam?.questions || []
     const question = questions[index]
     setSaving(true)
@@ -480,8 +545,11 @@ export default function SimulatePage() {
       const { data, error } = await supabase
         .from('exam_simulations')
         .update({
-          status: 'submitted',
-          submitted_at: new Date().toISOString()
+          status: 'marking',
+          submitted_at: simulation.submitted_at || new Date().toISOString(),
+          marking_model: EXAM_MARKING_MODEL,
+          marking_prompt_version: EXAM_MARKING_PROMPT_VERSION,
+          marking_error: null
         })
         .eq('id', simulation.id)
         .eq('user_id', user.id)
@@ -490,10 +558,128 @@ export default function SimulatePage() {
 
       if (error) throw error
       setSimulation(data)
+      await markSubmittedExam(data)
     } catch (e) {
       setError(e.message)
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  async function retryMarking() {
+    if (!simulation || !exam || simulation.status !== 'marking_failed') return
+    setSubmitting(true)
+    setError('')
+    try {
+      const { data, error } = await supabase
+        .from('exam_simulations')
+        .update({
+          status: 'marking',
+          marking_model: EXAM_MARKING_MODEL,
+          marking_prompt_version: EXAM_MARKING_PROMPT_VERSION,
+          marking_error: null
+        })
+        .eq('id', simulation.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (error) throw error
+      setSimulation(data)
+      await markSubmittedExam(data)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function markSubmittedExam(markingSimulation) {
+    try {
+      const prompt = buildMarkingPrompt({ exam, answers })
+      const { data: { session } } = await supabase.auth.getSession()
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/atlas-chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+          },
+          body: JSON.stringify({
+            systemPrompt: 'You are Atlas, an expert math examiner. Mark submitted answer-only exam attempts conservatively and return valid JSON only.',
+            messages: [{ role: 'user', content: prompt }],
+            context: 'exam_marking',
+            sessionId: markingSimulation.id,
+            userId: user.id,
+            maxTokens: 8192
+          })
+        }
+      )
+
+      const result = await response.json()
+      if (!response.ok || result.error) throw new Error(result.error || 'Marking request failed')
+
+      const raw = result.text.replace(/```json|```/g, '').trim()
+      const marking = JSON.parse(raw)
+      const rows = (marking.results || []).map(function (item) {
+        return {
+          simulation_id: markingSimulation.id,
+          user_id: user.id,
+          question_index: item.question_index,
+          question_number: item.question_number ? String(item.question_number) : String(item.question_index + 1),
+          topic: item.topic || null,
+          sub_topic: item.sub_topic || null,
+          marks_awarded: item.marks_awarded ?? null,
+          marks_available: item.marks_available ?? null,
+          correctness: item.correctness || 'not_markable',
+          error_type: item.error_type || 'not_markable',
+          confidence: item.confidence ?? null,
+          feedback_summary: item.feedback_summary || null,
+          lost_mark_reasons: item.lost_mark_reasons || [],
+          recommended_mastery_topics: item.recommended_mastery_topics || [],
+          raw_result: item
+        }
+      })
+
+      if (rows.length > 0) {
+        const { error: resultsError } = await supabase
+          .from('exam_simulation_marking_results')
+          .upsert(rows, { onConflict: 'simulation_id,question_index' })
+
+        if (resultsError) throw resultsError
+      }
+
+      const { data: marked, error: markedError } = await supabase
+        .from('exam_simulations')
+        .update({
+          status: 'marked',
+          marked_at: new Date().toISOString(),
+          marking_summary: marking.summary || {},
+          marking_error: null
+        })
+        .eq('id', markingSimulation.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (markedError) throw markedError
+      setSimulation(marked)
+    } catch (e) {
+      const { data } = await supabase
+        .from('exam_simulations')
+        .update({
+          status: 'marking_failed',
+          marking_error: e.message
+        })
+        .eq('id', markingSimulation.id)
+        .eq('user_id', user.id)
+        .select()
+        .single()
+
+      if (data) setSimulation(data)
+      throw e
     }
   }
 
@@ -621,7 +807,7 @@ export default function SimulatePage() {
   const currentAnswer = answers[currentQuestionIndex] || { answer_text: '', flagged: false }
   const remainingMs = getRemainingMs()
   const answeredCount = getAnsweredCount()
-  const isSubmitted = simulation?.status === 'submitted' || simulation?.status === 'marked'
+  const isAttemptLocked = ['submitted', 'marking', 'marked', 'marking_failed'].includes(simulation?.status)
   const isInProgress = simulation?.status === 'in_progress'
 
   if (simulation?.status === 'generated') {
@@ -705,12 +891,31 @@ export default function SimulatePage() {
           <button className="ghost" style={{ fontSize: '0.85rem' }} onClick={() => navigate('/patterns')}>Patterns</button>
         </div>
 
-        {isSubmitted && (
+        {isAttemptLocked && (
           <div style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
-            <p style={{ marginBottom: '0.25rem', fontWeight: 'bold' }}>Paper submitted</p>
-            <p className="muted" style={{ fontSize: '0.85rem', marginBottom: 0 }}>
-              Marking and feedback will be added in the next phase.
+            <p style={{ marginBottom: '0.25rem', fontWeight: 'bold' }}>
+              {simulation.status === 'marking'
+                ? 'Atlas is marking your paper'
+                : simulation.status === 'marking_failed'
+                ? 'Marking failed'
+                : simulation.status === 'marked'
+                ? 'Paper marked'
+                : 'Paper submitted'}
             </p>
+            <p className="muted" style={{ fontSize: '0.85rem', marginBottom: 0 }}>
+              {simulation.status === 'marking'
+                ? 'Your answers are locked while Atlas prepares the marking result.'
+                : simulation.status === 'marking_failed'
+                ? simulation.marking_error || 'Atlas could not mark this attempt. You can retry marking.'
+                : simulation.status === 'marked'
+                ? 'The post-exam report UI comes next.'
+                : 'Your answers are locked.'}
+            </p>
+            {simulation.status === 'marking_failed' && (
+              <button className="secondary" onClick={retryMarking} disabled={submitting} style={{ marginTop: '0.75rem' }}>
+                {submitting ? 'Retrying...' : 'Retry marking'}
+              </button>
+            )}
           </div>
         )}
 
@@ -727,7 +932,7 @@ export default function SimulatePage() {
           value={currentAnswer.answer_text}
           onChange={function (e) { updateAnswer(currentQuestionIndex, e.target.value) }}
           onBlur={function () { flushAnswer(currentQuestionIndex) }}
-          disabled={isSubmitted}
+          disabled={isAttemptLocked}
           rows={10}
           placeholder="Write your working here..."
           style={{ marginBottom: '1rem' }}
@@ -737,7 +942,7 @@ export default function SimulatePage() {
           <button
             className={currentAnswer.flagged ? 'primary' : 'secondary'}
             onClick={function () { toggleFlag(currentQuestionIndex) }}
-            disabled={isSubmitted}
+            disabled={isAttemptLocked}
           >
             {currentAnswer.flagged ? 'Flagged' : 'Flag'}
           </button>
@@ -765,7 +970,7 @@ export default function SimulatePage() {
             <div className="row" style={{ marginBottom: '1rem' }}>
               <div>
                 <p style={{ marginBottom: '0.1rem', fontWeight: 'bold' }}>
-                  {isInProgress ? formatDuration(remainingMs) : 'Submitted'}
+                  {isInProgress ? formatDuration(remainingMs) : simulation.status === 'marking' ? 'Marking' : simulation.status === 'marked' ? 'Marked' : 'Submitted'}
                 </p>
                 <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
                   {answeredCount}/{questions.length} answered
@@ -805,10 +1010,10 @@ export default function SimulatePage() {
             <button
               className="primary"
               onClick={submitExam}
-              disabled={isSubmitted || submitting}
+              disabled={isAttemptLocked || submitting}
               style={{ width: '100%', fontSize: '0.85rem' }}
             >
-              {submitting ? 'Submitting...' : isSubmitted ? 'Submitted' : 'Submit paper'}
+              {submitting ? 'Submitting...' : isAttemptLocked ? 'Submitted' : 'Submit paper'}
             </button>
           </div>
         )}
