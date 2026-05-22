@@ -72,6 +72,27 @@ function BreakdownItem({ label, score, tip }) {
   )
 }
 
+function formatSimulationDate(value) {
+  if (!value) return ''
+  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function getSimulationAction(status) {
+  if (status === 'generated') return 'Start'
+  if (status === 'in_progress') return 'Continue'
+  if (status === 'marked') return 'Review'
+  if (status === 'marking') return 'Marking'
+  if (status === 'marking_failed') return 'Review'
+  return 'Open'
+}
+
+function getSimulationLabel(status) {
+  if (status === 'generated') return 'not started'
+  if (status === 'in_progress') return 'in progress'
+  if (status === 'marking_failed') return 'marking failed'
+  return status
+}
+
 export default function PatternsPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -82,7 +103,7 @@ export default function PatternsPage() {
   const [narrative, setNarrative] = useState('')
   const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
-  const [latestSimulation, setLatestSimulation] = useState(null)
+  const [simulations, setSimulations] = useState([])
 
   useEffect(function () {
     if (!user) return
@@ -95,7 +116,7 @@ export default function PatternsPage() {
     try {
       const result = await getPatterns(user.id)
       setData(result)
-      loadLatestSimulation()
+      loadSimulations()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -103,20 +124,19 @@ export default function PatternsPage() {
     }
   }
 
-  async function loadLatestSimulation() {
+  async function loadSimulations() {
     try {
-      const { data: simulation } = await supabase
+      const { data: rows } = await supabase
         .from('exam_simulations')
-        .select('id, status, created_at')
+        .select('id, status, created_at, submitted_at, marked_at, exam_json, marking_summary')
         .eq('user_id', user.id)
         .in('status', ['generated', 'in_progress', 'submitted', 'marking', 'marked', 'marking_failed'])
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        .limit(5)
 
-      setLatestSimulation(simulation || null)
+      setSimulations(rows || [])
     } catch {
-      setLatestSimulation(null)
+      setSimulations([])
     }
   }
 
@@ -481,17 +501,38 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
               className="primary"
               disabled={data.confidence < 70}
               onClick={() => navigate('/simulate')}
-              style={{ marginRight: latestSimulation ? '0.75rem' : 0 }}
             >
               {data.confidence >= 70 ? 'Simulate exam →' : `Locked — ${70 - data.confidence}% more needed`}
             </button>
-            {latestSimulation && (
-              <button
-                className="secondary"
-                onClick={() => navigate('/simulate/' + latestSimulation.id)}
-              >
-                Continue saved simulation
-              </button>
+            {simulations.length > 0 && (
+              <div style={{ marginTop: '1.25rem' }}>
+                <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-muted)', marginBottom: '0.75rem' }}>
+                  Generated papers
+                </p>
+                {simulations.map(function (simulation) {
+                  const summary = simulation.marking_summary || {}
+                  const exam = simulation.exam_json || {}
+                  const awarded = summary.marks_awarded
+                  const available = summary.marks_available || exam.totalMarks
+                  return (
+                    <div key={simulation.id} className="row" style={{ padding: '0.65rem 0', borderTop: '1px solid var(--border)', gap: '0.75rem' }}>
+                      <div>
+                        <p style={{ fontSize: '0.9rem', marginBottom: '0.15rem' }}>
+                          {exam.title || 'Simulated Exam'} - {formatSimulationDate(simulation.created_at)}
+                        </p>
+                        <p className="muted" style={{ fontSize: '0.78rem', marginBottom: 0 }}>
+                          {getSimulationLabel(simulation.status)}
+                          {simulation.status === 'marked' && available ? ` - ${awarded || 0}/${available} marks` : ''}
+                        </p>
+                      </div>
+                      <span className="spacer" />
+                      <button className="secondary" onClick={() => navigate('/simulate/' + simulation.id)} style={{ fontSize: '0.8rem' }}>
+                        {getSimulationAction(simulation.status)}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>

@@ -8,6 +8,9 @@ const EXAM_MODEL = 'claude-sonnet-4-6'
 const EXAM_PROMPT_VERSION = 'exam_simulator_v1'
 const EXAM_MARKING_MODEL = 'claude-sonnet-4-6'
 const EXAM_MARKING_PROMPT_VERSION = 'exam_answer_only_marking_v1'
+const EXAM_GENERATION_MONTHLY_LIMIT = 3
+const EXAM_MARKING_MONTHLY_LIMIT = 3
+const EXAM_SIMULATION_STORAGE_LIMIT = 5
 
 function buildSimulationPrompt(data) {
   const examPapers = data.papers.filter(p => p.assessment_type === 'Past Exam')
@@ -273,6 +276,11 @@ function getResultTone(correctness) {
   return 'Not markable'
 }
 
+function getMonthStartIso() {
+  const now = new Date()
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+}
+
 export default function SimulatePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -392,6 +400,7 @@ export default function SimulatePage() {
     let simulationRecord = null
 
     try {
+      await assertGenerationQuota()
       const { data: created, error: createError } = await supabase
         .from('exam_simulations')
         .insert({
@@ -468,6 +477,47 @@ export default function SimulatePage() {
     } finally {
       setGenerating(false)
     }
+  }
+
+  async function assertGenerationQuota() {
+    const monthStart = getMonthStartIso()
+    const activeStatuses = ['generated', 'in_progress', 'submitted', 'marking', 'marked', 'marking_failed']
+
+    const { count: storedCount, error: storedError } = await supabase
+      .from('exam_simulations')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .in('status', activeStatuses)
+
+    if (storedError) throw storedError
+    if ((storedCount || 0) >= EXAM_SIMULATION_STORAGE_LIMIT) {
+      throw new Error(`You have reached the ${EXAM_SIMULATION_STORAGE_LIMIT}-paper simulator storage limit. Review an existing paper before generating another.`)
+    }
+
+    const { count: monthlyCount, error: monthlyError } = await supabase
+      .from('exam_simulations')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', monthStart)
+      .neq('status', 'failed')
+
+    if (monthlyError) throw monthlyError
+    if ((monthlyCount || 0) >= EXAM_GENERATION_MONTHLY_LIMIT) {
+      throw new Error(`You have reached this month's limit of ${EXAM_GENERATION_MONTHLY_LIMIT} generated papers.`)
+    }
+  }
+
+  async function hasMarkingQuota() {
+    const monthStart = getMonthStartIso()
+    const { count, error } = await supabase
+      .from('exam_simulations')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('submitted_at', monthStart)
+      .in('status', ['marking', 'marked', 'marking_failed'])
+
+    if (error) throw error
+    return (count || 0) < EXAM_MARKING_MONTHLY_LIMIT
   }
 
   async function startExam() {
@@ -586,14 +636,15 @@ export default function SimulatePage() {
     try {
       setSubmitDialogOpen(false)
       await flushAnswer(currentQuestionIndex)
+      const canMark = await hasMarkingQuota()
       const { data, error } = await supabase
         .from('exam_simulations')
         .update({
-          status: 'marking',
+          status: canMark ? 'marking' : 'marking_failed',
           submitted_at: simulation.submitted_at || new Date().toISOString(),
           marking_model: EXAM_MARKING_MODEL,
           marking_prompt_version: EXAM_MARKING_PROMPT_VERSION,
-          marking_error: null
+          marking_error: canMark ? null : `Monthly marking limit reached. This attempt is saved, but Atlas will not mark it this month.`
         })
         .eq('id', simulation.id)
         .eq('user_id', user.id)
@@ -602,7 +653,9 @@ export default function SimulatePage() {
 
       if (error) throw error
       setSimulation(data)
-      await markSubmittedExam(data)
+      if (canMark) {
+        await markSubmittedExam(data)
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -615,6 +668,10 @@ export default function SimulatePage() {
     setSubmitting(true)
     setError('')
     try {
+      const canMark = await hasMarkingQuota()
+      if (!canMark) {
+        throw new Error(`Monthly marking limit reached. You can review this attempt, but Atlas cannot mark more papers this month.`)
+      }
       const { data, error } = await supabase
         .from('exam_simulations')
         .update({

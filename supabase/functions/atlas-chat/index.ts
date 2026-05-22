@@ -83,6 +83,22 @@ const RENDER_VIZ_TOOL = {
 
 const SONNET_CONTEXTS = ['exam_simulation', 'exam_marking']
 
+const MODEL_PRICING_USD_PER_M: Record<string, { input: number; output: number }> = {
+  'claude-haiku-4-5-20251001': { input: 0.80, output: 4.00 },
+  'claude-sonnet-4-6': { input: 3.00, output: 15.00 }
+}
+
+function estimateCostUsd(model: string, inputTokens: number, outputTokens: number) {
+  const pricing = MODEL_PRICING_USD_PER_M[model] ?? MODEL_PRICING_USD_PER_M['claude-haiku-4-5-20251001']
+  const inputCost = inputTokens / 1_000_000 * pricing.input
+  const outputCost = outputTokens / 1_000_000 * pricing.output
+  return {
+    cost: Number((inputCost + outputCost).toFixed(8)),
+    inputCostPerM: pricing.input,
+    outputCostPerM: pricing.output
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -102,6 +118,8 @@ serve(async (req) => {
 
     const usesSonnet = SONNET_CONTEXTS.includes(body.context)
 
+    const selectedModel = usesSonnet ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
+
     const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -111,9 +129,7 @@ serve(async (req) => {
         'anthropic-beta': 'prompt-caching-2024-07-31'
       },
       body: JSON.stringify({
-        model: usesSonnet
-          ? 'claude-sonnet-4-6'
-          : 'claude-haiku-4-5-20251001',
+        model: selectedModel,
         max_tokens: body.maxTokens || 2048,
         system: [
           {
@@ -152,6 +168,7 @@ serve(async (req) => {
 
     // Log tokens server-side
     if (usage && sessionId && userId) {
+      const estimated = estimateCostUsd(selectedModel, usage.input_tokens, usage.output_tokens)
       const supabaseClient = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -161,8 +178,12 @@ serve(async (req) => {
         session_id: sessionId,
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
-        model: usesSonnet ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001',
-        context: context || 'engine'
+        model: selectedModel,
+        context: context || 'engine',
+        estimated_cost_usd: estimated.cost,
+        input_cost_per_m: estimated.inputCostPerM,
+        output_cost_per_m: estimated.outputCostPerM,
+        cost_currency: 'USD'
       })
     }
 
