@@ -252,6 +252,27 @@ function getQuestionLabel(question, index) {
   return 'Q' + (question?.number || index + 1)
 }
 
+function formatMarkValue(value) {
+  if (value === null || value === undefined || value === '') return '-'
+  const number = Number(value)
+  if (Number.isNaN(number)) return String(value)
+  return Number.isInteger(number) ? String(number) : number.toFixed(1)
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined || value === '') return '-'
+  const number = Number(value)
+  if (Number.isNaN(number)) return '-'
+  return Math.round(number) + '%'
+}
+
+function getResultTone(correctness) {
+  if (correctness === 'correct') return 'Correct'
+  if (correctness === 'partially_correct') return 'Partial'
+  if (correctness === 'incorrect') return 'Incorrect'
+  return 'Not markable'
+}
+
 export default function SimulatePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -261,6 +282,7 @@ export default function SimulatePage() {
   const [exam, setExam] = useState(null)
   const [simulation, setSimulation] = useState(null)
   const [answers, setAnswers] = useState({})
+  const [markingResults, setMarkingResults] = useState({})
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [now, setNow] = useState(Date.now())
@@ -319,6 +341,20 @@ export default function SimulatePage() {
         }
       }
       setAnswers(answerMap)
+
+      const { data: markingRows, error: markingError } = await supabase
+        .from('exam_simulation_marking_results')
+        .select('*')
+        .eq('simulation_id', id)
+        .eq('user_id', user.id)
+
+      if (markingError) throw markingError
+
+      const resultMap = {}
+      for (const row of markingRows || []) {
+        resultMap[row.question_index] = row
+      }
+      setMarkingResults(resultMap)
 
       if (data.status === 'failed') {
         setError(data.error || 'Simulation generation failed.')
@@ -649,6 +685,12 @@ export default function SimulatePage() {
           .upsert(rows, { onConflict: 'simulation_id,question_index' })
 
         if (resultsError) throw resultsError
+
+        const resultMap = {}
+        for (const row of rows) {
+          resultMap[row.question_index] = row
+        }
+        setMarkingResults(resultMap)
       }
 
       const { data: marked, error: markedError } = await supabase
@@ -733,6 +775,100 @@ export default function SimulatePage() {
     )
   }
 
+  function renderReportSummary() {
+    const summary = simulation?.marking_summary || {}
+    const awarded = summary.marks_awarded
+    const available = summary.marks_available || exam?.totalMarks
+    const percentage = summary.estimated_percentage
+      ?? (awarded !== undefined && available ? Number(awarded) / Number(available) * 100 : null)
+    const weaknesses = Array.isArray(summary.top_weaknesses) ? summary.top_weaknesses : []
+    const recommendedTopics = Array.isArray(summary.recommended_mastery_topics) ? summary.recommended_mastery_topics : []
+
+    return (
+      <div style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+        <p style={{ fontWeight: 'bold', marginBottom: '0.85rem' }}>Post-exam report</p>
+        <div className="row" style={{ gap: '1.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+          <div>
+            <p style={{ fontSize: '1.4rem', lineHeight: 1 }}>{formatPercent(percentage)}</p>
+            <p className="muted" style={{ fontSize: '0.8rem' }}>Estimated score</p>
+          </div>
+          <div>
+            <p style={{ fontSize: '1.4rem', lineHeight: 1 }}>
+              {formatMarkValue(awarded)} / {formatMarkValue(available)}
+            </p>
+            <p className="muted" style={{ fontSize: '0.8rem' }}>Estimated marks</p>
+          </div>
+        </div>
+
+        {summary.overall_feedback && (
+          <p className="muted" style={{ fontSize: '0.9rem', marginBottom: '0.85rem' }}>
+            {summary.overall_feedback}
+          </p>
+        )}
+
+        {weaknesses.length > 0 && (
+          <div style={{ marginBottom: '0.85rem' }}>
+            <p style={{ fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.35rem' }}>Weak areas</p>
+            {weaknesses.slice(0, 4).map(function (weakness, index) {
+              return <p key={index} className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}>{weakness}</p>
+            })}
+          </div>
+        )}
+
+        {recommendedTopics.length > 0 && (
+          <div>
+            <p style={{ fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.35rem' }}>Recommended practice</p>
+            {recommendedTopics.slice(0, 4).map(function (topic, index) {
+              return <p key={index} className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}>{topic}</p>
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function renderQuestionFeedback(result) {
+    if (!result) return null
+    const lostReasons = Array.isArray(result.lost_mark_reasons) ? result.lost_mark_reasons : []
+    const recommendedTopics = Array.isArray(result.recommended_mastery_topics) ? result.recommended_mastery_topics : []
+
+    return (
+      <div style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+        <div className="row" style={{ alignItems: 'baseline', marginBottom: '0.65rem' }}>
+          <p style={{ fontWeight: 'bold', marginBottom: 0 }}>Question feedback</p>
+          <span className="spacer" />
+          <span className="muted" style={{ fontSize: '0.85rem' }}>
+            {formatMarkValue(result.marks_awarded)} / {formatMarkValue(result.marks_available)} marks
+          </span>
+        </div>
+        <p className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.35rem' }}>
+          {getResultTone(result.correctness)}{result.error_type ? ' - ' + result.error_type.replace(/_/g, ' ') : ''}
+        </p>
+        {result.feedback_summary && (
+          <p className="muted" style={{ fontSize: '0.9rem', marginBottom: lostReasons.length ? '0.75rem' : 0 }}>
+            {result.feedback_summary}
+          </p>
+        )}
+        {lostReasons.length > 0 && (
+          <div style={{ marginBottom: recommendedTopics.length ? '0.75rem' : 0 }}>
+            <p style={{ fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.35rem' }}>Lost marks</p>
+            {lostReasons.slice(0, 4).map(function (reason, index) {
+              return <p key={index} className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}>{reason}</p>
+            })}
+          </div>
+        )}
+        {recommendedTopics.length > 0 && (
+          <div>
+            <p style={{ fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.35rem' }}>Practice next</p>
+            {recommendedTopics.slice(0, 3).map(function (topic, index) {
+              return <p key={index} className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}>{topic}</p>
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   if (loading) {
     return <div className="page"><p className="muted">Loading pattern data...</p></div>
   }
@@ -805,6 +941,7 @@ export default function SimulatePage() {
   const questions = exam.questions || []
   const currentQuestion = questions[currentQuestionIndex] || questions[0]
   const currentAnswer = answers[currentQuestionIndex] || { answer_text: '', flagged: false }
+  const currentResult = markingResults[currentQuestionIndex]
   const remainingMs = getRemainingMs()
   const answeredCount = getAnsweredCount()
   const isAttemptLocked = ['submitted', 'marking', 'marked', 'marking_failed'].includes(simulation?.status)
@@ -908,7 +1045,7 @@ export default function SimulatePage() {
                 : simulation.status === 'marking_failed'
                 ? simulation.marking_error || 'Atlas could not mark this attempt. You can retry marking.'
                 : simulation.status === 'marked'
-                ? 'The post-exam report UI comes next.'
+                ? 'Review the estimated marking below, then use it to choose what to practice next.'
                 : 'Your answers are locked.'}
             </p>
             {simulation.status === 'marking_failed' && (
@@ -918,6 +1055,8 @@ export default function SimulatePage() {
             )}
           </div>
         )}
+
+        {simulation.status === 'marked' && renderReportSummary()}
 
         <div style={{ paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)', marginBottom: '1rem' }}>
           {currentQuestion && renderQuestion(currentQuestion)}
@@ -937,6 +1076,8 @@ export default function SimulatePage() {
           placeholder="Write your working here..."
           style={{ marginBottom: '1rem' }}
         />
+
+        {simulation.status === 'marked' && renderQuestionFeedback(currentResult)}
 
         <div className="row" style={{ gap: '0.75rem', flexWrap: 'wrap' }}>
           <button
@@ -983,6 +1124,7 @@ export default function SimulatePage() {
             <div style={{ marginBottom: '1.25rem' }}>
               {questions.map(function (question, index) {
                 const answer = answers[index] || {}
+                const result = markingResults[index]
                 const active = index === currentQuestionIndex
                 const answered = (answer.answer_text || '').trim().length > 0
                 return (
@@ -1001,7 +1143,11 @@ export default function SimulatePage() {
                     }}
                   >
                     <span>{getQuestionLabel(question, index)}</span>
-                    <span>{answer.flagged ? 'Flag' : answered ? 'Done' : 'Empty'}</span>
+                    <span>
+                      {result
+                        ? `${formatMarkValue(result.marks_awarded)}/${formatMarkValue(result.marks_available)}`
+                        : answer.flagged ? 'Flag' : answered ? 'Done' : 'Empty'}
+                    </span>
                   </button>
                 )
               })}
