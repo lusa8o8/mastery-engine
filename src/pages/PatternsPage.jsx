@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getPatterns } from '../utils/getPatterns'
+import { getUserSimulatorQuota } from '../utils/simulatorQuotas'
 import { supabase } from '../api/supabase'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -104,6 +105,7 @@ export default function PatternsPage() {
   const [narrativeLoading, setNarrativeLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('overview')
   const [simulations, setSimulations] = useState([])
+  const [quota, setQuota] = useState(null)
 
   useEffect(function () {
     if (!user) return
@@ -117,6 +119,7 @@ export default function PatternsPage() {
       const result = await getPatterns(user.id)
       setData(result)
       loadSimulations()
+      loadQuota()
     } catch (e) {
       setError(e.message)
     } finally {
@@ -137,6 +140,15 @@ export default function PatternsPage() {
       setSimulations(rows || [])
     } catch {
       setSimulations([])
+    }
+  }
+
+  async function loadQuota() {
+    try {
+      const nextQuota = await getUserSimulatorQuota(user.id)
+      setQuota(nextQuota)
+    } catch {
+      setQuota(null)
     }
   }
 
@@ -497,6 +509,11 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
                 : `Reach 70% confidence to unlock. Currently at ${data.confidence}%. Upload more Past Exam PDFs to increase confidence.`
               }
             </p>
+            {quota && (
+              <p className="muted" style={{ fontSize: '0.8rem', marginBottom: '0.75rem' }}>
+                {quota.label}: {quota.generatedPapersPerMonth} generation{quota.generatedPapersPerMonth === 1 ? '' : 's'} / month, {quota.markedAttemptsPerMonth} marked attempt{quota.markedAttemptsPerMonth === 1 ? '' : 's'} / month, {quota.storedPapers} saved paper{quota.storedPapers === 1 ? '' : 's'}.
+              </p>
+            )}
             <button
               className="primary"
               disabled={data.confidence < 70}
