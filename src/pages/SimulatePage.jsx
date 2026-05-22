@@ -638,6 +638,19 @@ export default function SimulatePage() {
         </p>
 
         <div style={{ padding: '1.25rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
+          <p style={{ fontWeight: 'bold', marginBottom: '0.75rem' }}>Before you start</p>
+          <p className="muted" style={{ fontSize: '0.9rem', marginBottom: '0.35rem' }}>
+            Flag questions you want to revisit before submitting.
+          </p>
+          <p className="muted" style={{ fontSize: '0.9rem', marginBottom: '0.35rem' }}>
+            Your answers save as you work, so refreshing keeps your attempt.
+          </p>
+          <p className="muted" style={{ fontSize: '0.9rem', marginBottom: 0 }}>
+            The timer starts when you press Start exam.
+          </p>
+        </div>
+
+        <div style={{ padding: '1.25rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', marginBottom: '1.5rem' }}>
           <div className="row" style={{ gap: '2rem', flexWrap: 'wrap' }}>
             <div>
               <p style={{ fontSize: '1.4rem', lineHeight: 1 }}>{exam.timeMinutes || 180}m</p>
