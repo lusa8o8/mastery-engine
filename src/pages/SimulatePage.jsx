@@ -274,6 +274,13 @@ function getResultTone(correctness) {
   return 'Not markable'
 }
 
+function normalizeTargetText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
 export default function SimulatePage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -284,6 +291,7 @@ export default function SimulatePage() {
   const [simulation, setSimulation] = useState(null)
   const [answers, setAnswers] = useState({})
   const [markingResults, setMarkingResults] = useState({})
+  const [masteryTargets, setMasteryTargets] = useState([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [railCollapsed, setRailCollapsed] = useState(false)
   const [now, setNow] = useState(Date.now())
@@ -299,6 +307,7 @@ export default function SimulatePage() {
   useEffect(function () {
     if (!user) return
     loadQuota()
+    loadMasteryTargets()
     if (simulationId) loadSimulation(simulationId)
     else loadPatterns()
   }, [user, simulationId])
@@ -376,6 +385,36 @@ export default function SimulatePage() {
       setQuota(nextQuota)
     } catch {
       setQuota(null)
+    }
+  }
+
+  async function loadMasteryTargets() {
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('topic, sub_type')
+        .eq('user_id', user.id)
+
+      if (error) throw error
+
+      const seen = new Set()
+      const targets = []
+      for (const row of data || []) {
+        if (!row.topic || !row.sub_type) continue
+        const key = normalizeTargetText(row.topic + ' ' + row.sub_type)
+        if (seen.has(key)) continue
+        seen.add(key)
+        targets.push({
+          topic: row.topic,
+          subType: row.sub_type,
+          topicKey: normalizeTargetText(row.topic),
+          subTypeKey: normalizeTargetText(row.sub_type),
+          combinedKey: key
+        })
+      }
+      setMasteryTargets(targets)
+    } catch {
+      setMasteryTargets([])
     }
   }
 
@@ -701,6 +740,66 @@ export default function SimulatePage() {
     }
   }
 
+  function findMasteryTarget(label, result) {
+    const labelKey = normalizeTargetText(label)
+    const topicKey = normalizeTargetText(result?.topic)
+    const subTypeKey = normalizeTargetText(result?.sub_topic)
+
+    if (subTypeKey) {
+      const exactSubType = masteryTargets.find(target => target.subTypeKey === subTypeKey)
+      if (exactSubType) return exactSubType
+    }
+
+    if (topicKey && subTypeKey) {
+      const exactPair = masteryTargets.find(target => target.topicKey === topicKey && target.subTypeKey === subTypeKey)
+      if (exactPair) return exactPair
+    }
+
+    if (labelKey) {
+      const exactLabel = masteryTargets.find(target => target.subTypeKey === labelKey || target.topicKey === labelKey)
+      if (exactLabel) return exactLabel
+
+      const partialLabel = masteryTargets.find(function (target) {
+        return target.combinedKey.includes(labelKey) ||
+          labelKey.includes(target.subTypeKey) ||
+          labelKey.includes(target.topicKey)
+      })
+      if (partialLabel) return partialLabel
+    }
+
+    if (topicKey) {
+      return masteryTargets.find(target => target.topicKey === topicKey) || null
+    }
+
+    return null
+  }
+
+  async function startMasteryPractice(target) {
+    if (!target || !user) return
+    setSaving(true)
+    setError('')
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .insert({
+          user_id: user.id,
+          topic: target.topic,
+          sub_type: target.subType,
+          current_layer: 'foundation'
+        })
+        .select()
+        .single()
+
+      if (error) throw error
+      const encoded = encodeURIComponent(`${target.topic}__${target.subType}__${data.id}`)
+      navigate(`/engine/${encoded}`)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function markSubmittedExam(markingSimulation) {
     try {
       const prompt = buildMarkingPrompt({ exam, answers })
@@ -890,7 +989,18 @@ export default function SimulatePage() {
           <div>
             <p style={{ fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.35rem' }}>Recommended practice</p>
             {recommendedTopics.slice(0, 4).map(function (topic, index) {
-              return <p key={index} className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}>{topic}</p>
+              const target = findMasteryTarget(topic)
+              return (
+                <div key={index} className="row" style={{ gap: '0.75rem', marginBottom: '0.35rem' }}>
+                  <p className="muted" style={{ fontSize: '0.85rem', marginBottom: 0 }}>{topic}</p>
+                  <span className="spacer" />
+                  {target && (
+                    <button className="secondary" onClick={() => startMasteryPractice(target)} disabled={saving} style={{ fontSize: '0.78rem', minHeight: 'unset', padding: '0.25rem 0.55rem' }}>
+                      Practice
+                    </button>
+                  )}
+                </div>
+              )
             })}
           </div>
         )}
@@ -932,7 +1042,18 @@ export default function SimulatePage() {
           <div>
             <p style={{ fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '0.35rem' }}>Practice next</p>
             {recommendedTopics.slice(0, 3).map(function (topic, index) {
-              return <p key={index} className="muted" style={{ fontSize: '0.85rem', marginBottom: '0.2rem' }}>{topic}</p>
+              const target = findMasteryTarget(topic, result)
+              return (
+                <div key={index} className="row" style={{ gap: '0.75rem', marginBottom: '0.35rem' }}>
+                  <p className="muted" style={{ fontSize: '0.85rem', marginBottom: 0 }}>{topic}</p>
+                  <span className="spacer" />
+                  {target && (
+                    <button className="secondary" onClick={() => startMasteryPractice(target)} disabled={saving} style={{ fontSize: '0.78rem', minHeight: 'unset', padding: '0.25rem 0.55rem' }}>
+                      Practice
+                    </button>
+                  )}
+                </div>
+              )
             })}
           </div>
         )}
