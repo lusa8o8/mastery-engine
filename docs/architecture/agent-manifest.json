@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "agent_id": "atlas-learning-system",
+  "version": "0.1.0-design",
+  "objective": "Turn uploaded mathematics resources into reliable progressive teaching, assessment, simulation, and evidence-linked remediation.",
+  "risk_level": "high",
+  "architecture": {
+    "type": "routed_workflow",
+    "rationale": "Known product routes need separate schemas, evaluations, budgets, and state policies while sharing one Atlas identity.",
+    "simpler_options_rejected": [
+      "Deterministic code alone cannot interpret varied documents or teach open-ended mathematics.",
+      "A single model call cannot safely perform ingestion, validation, progression, exam construction, and remediation.",
+      "One linear workflow cannot represent the distinct user-selected product routes."
+    ]
+  },
+  "interfaces": ["api", "web", "mobile", "batch"],
+  "capabilities": [
+    {"id":"ingest-resource","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Verify ownership, idempotency, schemas, counts, and evidence anchors.","owner_skill":"build-and-evaluate-vision-agents","rationale":"Ingestion requires durable staged processing."},
+    {"id":"read-resource-evidence","kind":"resource","initiator":"application","access":"read","side_effect":false,"consequence":"none","approval":"none","verification":"Verify tenant, resource, page, region, and extraction version.","owner_skill":"build-and-evaluate-vision-agents","rationale":"Teaching and highlighting must remain grounded."},
+    {"id":"normalize-concepts","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Validate canonical IDs, aliases, confidence, evidence, and taxonomy version.","owner_skill":"engineer-and-evaluate-prompts","rationale":"Canonical concepts prevent fragmented routing."},
+    {"id":"analyze-patterns","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Run deterministic fixtures and store an immutable snapshot.","owner_skill":null,"rationale":"Patterns are reproducible high-value application logic."},
+    {"id":"produce-tutor-turn","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Validate structured output, evidence, confidence, and transition before persistence.","owner_skill":"engineer-and-evaluate-prompts","rationale":"Tutoring needs bounded interpretation and durable state."},
+    {"id":"compute-mathematics","kind":"tool","initiator":"model","access":"execute","side_effect":false,"consequence":"none","approval":"none","verification":"Validate typed inputs, output, time, and tool-call identifier.","owner_skill":"build-anthropic-tool-agents","rationale":"Some calculations need deterministic verification."},
+    {"id":"render-math-visualization","kind":"tool","initiator":"model","access":"execute","side_effect":false,"consequence":"none","approval":"none","verification":"Validate schema, expressions, render result, and result pairing.","owner_skill":"build-anthropic-tool-agents","rationale":"Visual explanations need a bounded tool loop."},
+    {"id":"generate-exam","kind":"workflow","initiator":"user","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Validate blueprint, schema, marks, uniqueness, solvability, and publication.","owner_skill":"engineer-and-evaluate-prompts","rationale":"Exam creation is a known multi-stage workflow."},
+    {"id":"mark-exam","kind":"workflow","initiator":"user","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Check schema, mark-scheme agreement, totals, confidence, and persistence.","owner_skill":"engineer-and-evaluate-prompts","rationale":"Marking requires explicit evidence and uncertainty."},
+    {"id":"create-remediation","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Verify source exam, question, concept, diagnosis, objective, and completion criteria.","owner_skill":null,"rationale":"A durable assignment closes the assessment loop."}
+  ],
+  "data": {
+    "tenant_scoped": true,
+    "sensitive": true,
+    "sources": ["student uploaded PDFs and images","student answers and learning history","deterministic processors","versioned model outputs","application curriculum taxonomy"],
+    "retention": "Define cascading account deletion before production and retain only minimal versioned audit references without secrets.",
+    "trust_boundaries": ["student browser","authenticated application API","background workers","Supabase","model provider","untrusted uploaded and generated content"]
+  },
+  "budgets": {"max_model_calls":4,"max_tool_rounds":2,"timeout_seconds":300,"max_input_tokens":100000,"max_output_tokens":12000,"cost_limit_usd":1.0},
+  "policies": {
+    "clarification": "Clarify or review ambiguous regions, transcriptions, concept matches, or student answers.",
+    "abstention": "Do not publish extraction, promote mastery, publish an exam, or assign marks below the evidence threshold.",
+    "approval": "Normal tenant-scoped learning writes need no repeated approval; destructive deletion requires explicit confirmation.",
+    "environment_inspection": "Derive identity from the token and inspect ownership, state, quota, and version before every write.",
+    "postcondition_verification": "Read back and validate identifiers, status, counts, links, and transitions after mutations."
+  },
+  "evaluation": {
+    "development_dataset":"evals/datasets/development/",
+    "held_out_dataset":"evals/datasets/held-out/",
+    "metrics":["extraction accuracy","segmentation accuracy","taxonomy and remediation routing accuracy","mathematical correctness","answer-grading agreement","mastery progression precision","exam validity and marking agreement","latency, calls, tokens, cost, retries, and abstentions"],
+    "critical_failures":["cross-tenant access","unauthorized write","silent source corruption","false mathematics accepted as correct","unsupported mastery promotion","invalid published exam","unbounded execution"],
+    "held_out_required":true,
+    "html_report":true
+  },
+  "excluded_capabilities": [
+    {"capability":"single general tool agent","reason":"Routes and transitions are known and independently evaluable.","evidence_to_add":"Cases showing valid tool sequences must vary dynamically."},
+    {"capability":"multi-agent delegation","reason":"No measured isolation or specialization benefit.","evidence_to_add":"Stable parent contract and measured specialist improvement."},
+    {"capability":"broad curriculum RAG","reason":"Scoped uploaded-resource lookup is enough initially.","evidence_to_add":"Retrieval evals showing direct lookup is inadequate."},
+    {"capability":"open web search","reason":"Outside the resource-grounded scope.","evidence_to_add":"Approved sourced-information feature with citation evals."},
+    {"capability":"general code execution","reason":"Unnecessary authority for tutoring.","evidence_to_add":"Reviewed tasks bounded math tools cannot solve."}
+  ],
+  "residual_risks": ["Ambiguous scans and handwriting","Probabilistic teaching and grading","Taxonomy governance","Resource rights and retention","Highlighting depends on region accuracy"]
+}
