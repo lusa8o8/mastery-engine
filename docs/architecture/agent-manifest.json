@@ -1,12 +1,12 @@
 {
   "schema_version": "1.0",
   "agent_id": "atlas-learning-system",
-  "version": "0.1.0-design",
-  "objective": "Turn uploaded mathematics resources into reliable progressive teaching, assessment, simulation, and evidence-linked remediation.",
+  "version": "0.2.0-design",
+  "objective": "Turn private and explicitly contributed mathematics resources into reliable progressive teaching, assessment, simulation, remediation, and institution-specific learning intelligence.",
   "risk_level": "high",
   "architecture": {
     "type": "routed_workflow",
-    "rationale": "Known product routes need separate schemas, evaluations, budgets, and state policies while sharing one Atlas identity.",
+    "rationale": "Known private-learning, contribution, library, tutoring, and assessment routes need separate schemas, evaluations, permissions, and state policies while sharing one Atlas identity.",
     "simpler_options_rejected": [
       "Deterministic code alone cannot interpret varied documents or teach open-ended mathematics.",
       "A single model call cannot safely perform ingestion, validation, progression, exam construction, and remediation.",
@@ -24,37 +24,41 @@
     {"id":"render-math-visualization","kind":"tool","initiator":"model","access":"execute","side_effect":false,"consequence":"none","approval":"none","verification":"Validate schema, expressions, render result, and result pairing.","owner_skill":"build-anthropic-tool-agents","rationale":"Visual explanations need a bounded tool loop."},
     {"id":"generate-exam","kind":"workflow","initiator":"user","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Validate blueprint, schema, marks, uniqueness, solvability, and publication.","owner_skill":"engineer-and-evaluate-prompts","rationale":"Exam creation is a known multi-stage workflow."},
     {"id":"mark-exam","kind":"workflow","initiator":"user","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Check schema, mark-scheme agreement, totals, confidence, and persistence.","owner_skill":"engineer-and-evaluate-prompts","rationale":"Marking requires explicit evidence and uncertainty."},
-    {"id":"create-remediation","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Verify source exam, question, concept, diagnosis, objective, and completion criteria.","owner_skill":null,"rationale":"A durable assignment closes the assessment loop."}
+    {"id":"create-remediation","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Verify source exam, question, concept, diagnosis, objective, and completion criteria.","owner_skill":null,"rationale":"A durable assignment closes the assessment loop."},
+    {"id":"submit-contribution","kind":"workflow","initiator":"user","access":"write","side_effect":true,"consequence":"internal","approval":"always","verification":"Verify private ownership, explicit versioned consent, rights attestation, confirmed institution/course metadata, and immutable submission state.","owner_skill":"build-and-evaluate-vision-agents","rationale":"Contribution must be a separate explicit act from private upload."},
+    {"id":"review-and-publish-contribution","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"external_consequential","approval":"conditional","verification":"Require accepted privacy, duplicate, rights, eligibility, metadata, and quality checks; publish under an explicit access policy and verify visibility.","owner_skill":"build-and-evaluate-vision-agents","rationale":"Shared-library publication needs governed review rather than model autonomy."},
+    {"id":"grant-contributor-benefit","kind":"workflow","initiator":"application","access":"write","side_effect":true,"consequence":"internal","approval":"conditional","verification":"Require an accepted contribution, idempotency key, reward policy version, and entitlement readback.","owner_skill":null,"rationale":"Benefits create the network incentive but must follow accepted value."},
+    {"id":"read-institution-library","kind":"resource","initiator":"application","access":"read","side_effect":false,"consequence":"none","approval":"none","verification":"Verify user entitlement, institution/course scope, approved source status, allowed use, and takedown status on every read.","owner_skill":null,"rationale":"Authorized institution evidence improves lecturer-specific tutoring and simulation."}
   ],
   "data": {
     "tenant_scoped": true,
     "sensitive": true,
-    "sources": ["student uploaded PDFs and images","student answers and learning history","deterministic processors","versioned model outputs","application curriculum taxonomy"],
-    "retention": "Define cascading account deletion before production and retain only minimal versioned audit references without secrets.",
-    "trust_boundaries": ["student browser","authenticated application API","background workers","Supabase","model provider","untrusted uploaded and generated content"]
+    "sources": ["student uploaded PDFs and images","explicit contribution consent and rights attestations","confirmed institution and course metadata","reviewer decisions","approved institution library resources","student answers and learning history","deterministic processors","versioned model outputs","application curriculum taxonomy"],
+    "retention": "Define cascading account deletion, contribution withdrawal, library takedown, entitlement policy, and derived-snapshot invalidation before production; retain only minimal versioned audit references without secrets.",
+    "trust_boundaries": ["student browser","private user resource scope","contribution review queue","approved shared institution library","library consumers and entitlements","authenticated application API","background workers","Supabase","model provider","untrusted uploaded and generated content"]
   },
   "budgets": {"max_model_calls":4,"max_tool_rounds":2,"timeout_seconds":300,"max_input_tokens":100000,"max_output_tokens":12000,"cost_limit_usd":1.0},
   "policies": {
-    "clarification": "Clarify or review ambiguous regions, transcriptions, concept matches, or student answers.",
-    "abstention": "Do not publish extraction, promote mastery, publish an exam, or assign marks below the evidence threshold.",
-    "approval": "Normal tenant-scoped learning writes need no repeated approval; destructive deletion requires explicit confirmation.",
-    "environment_inspection": "Derive identity from the token and inspect ownership, state, quota, and version before every write.",
-    "postcondition_verification": "Read back and validate identifiers, status, counts, links, and transitions after mutations."
+    "clarification": "Clarify or review ambiguous regions, transcriptions, institution/course metadata, rights status, concept matches, or student answers.",
+    "abstention": "Do not publish extraction or contributions, grant rewards, promote mastery, publish an exam, or assign marks below the route's evidence and authorization threshold.",
+    "approval": "Private upload is not contribution consent; contribution requires explicit versioned user approval, shared publication requires an accepted review, and destructive deletion requires explicit confirmation.",
+    "environment_inspection": "Derive identity from the token and inspect ownership, consent, contribution eligibility, library entitlement, takedown status, state, quota, and version before every read or write.",
+    "postcondition_verification": "Read back and validate identifiers, status, counts, publication visibility, entitlements, links, and transitions after mutations."
   },
   "evaluation": {
     "development_dataset":"evals/datasets/development/",
     "held_out_dataset":"evals/datasets/held-out/",
-    "metrics":["extraction accuracy","segmentation accuracy","taxonomy and remediation routing accuracy","mathematical correctness","answer-grading agreement","mastery progression precision","exam validity and marking agreement","latency, calls, tokens, cost, retries, and abstentions"],
-    "critical_failures":["cross-tenant access","unauthorized write","silent source corruption","false mathematics accepted as correct","unsupported mastery promotion","invalid published exam","unbounded execution"],
+    "metrics":["extraction accuracy","segmentation accuracy","contribution eligibility and metadata accuracy","personal-data detection recall","duplicate detection precision and recall","institution library authorization accuracy","taxonomy and remediation routing accuracy","mathematical correctness","answer-grading agreement","mastery progression precision","exam validity and marking agreement","latency, calls, tokens, cost, retries, and abstentions"],
+    "critical_failures":["cross-tenant or library access","publication without explicit consent","publication of leaked, personally identifying, or ineligible content","reward before contribution acceptance","unauthorized write","silent source corruption","false mathematics accepted as correct","unsupported mastery promotion","invalid published exam","unbounded execution"],
     "held_out_required":true,
     "html_report":true
   },
   "excluded_capabilities": [
     {"capability":"single general tool agent","reason":"Routes and transitions are known and independently evaluable.","evidence_to_add":"Cases showing valid tool sequences must vary dynamically."},
     {"capability":"multi-agent delegation","reason":"No measured isolation or specialization benefit.","evidence_to_add":"Stable parent contract and measured specialist improvement."},
-    {"capability":"broad curriculum RAG","reason":"Scoped uploaded-resource lookup is enough initially.","evidence_to_add":"Retrieval evals showing direct lookup is inadequate."},
+    {"capability":"broad curriculum RAG","reason":"Deterministic institution, course, resource, concept, and access filters plus lexical lookup are more reliable initially.","evidence_to_add":"Retrieval evals showing authorized scoped lookup cannot find appropriate material."},
     {"capability":"open web search","reason":"Outside the resource-grounded scope.","evidence_to_add":"Approved sourced-information feature with citation evals."},
     {"capability":"general code execution","reason":"Unnecessary authority for tutoring.","evidence_to_add":"Reviewed tasks bounded math tools cannot solve."}
   ],
-  "residual_risks": ["Ambiguous scans and handwriting","Probabilistic teaching and grading","Taxonomy governance","Resource rights and retention","Highlighting depends on region accuracy"]
+  "residual_risks": ["Ambiguous scans and handwriting","Probabilistic teaching and grading","Taxonomy governance","Inaccurate contributor rights attestations and takedown exposure","Institution and lecturer privacy or misclassification","Incentive-driven spam, duplicates, manipulation, or leaked assessments","Highlighting depends on region accuracy"]
 }

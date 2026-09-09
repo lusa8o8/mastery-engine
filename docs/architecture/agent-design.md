@@ -2,7 +2,7 @@
 
 ## Decision Summary
 
-- Objective: Turn uploaded mathematics resources into reliable progressive teaching, assessment, exam simulation, and evidence-linked remediation.
+- Objective: Turn private and explicitly contributed mathematics resources into reliable progressive teaching, assessment, exam simulation, evidence-linked remediation, and institution-specific learning intelligence.
 - Selected architecture: A server-owned routed workflow, initially implemented as a modular Python service with background workers, bounded model calls, and a few read-only tools.
 - Why simpler options are insufficient: Deterministic code cannot interpret varied documents or teach and assess open-ended mathematics by itself. One model call cannot safely cover ingestion, validation, learner-state updates, exam construction, and remediation.
 - Why more complex options are unnecessary: The product routes are known. A general tool agent or parent with subagents adds autonomy, latency, cost, and evaluation work without solving a demonstrated routing problem.
@@ -21,6 +21,10 @@
 - Mark a simulation with explicit confidence and uncertainty.
 - Create an evidence-linked remediation assignment and route it back into Atlas.
 - Render one session as mobile chat or desktop resource-focus mode.
+- Let a student explicitly submit an eligible private resource for contribution without changing the default privacy of other uploads.
+- Review, deduplicate, de-identify, approve, and publish eligible resources into institution/course libraries.
+- Grant contributor benefits only after a contribution is accepted.
+- Use approved institution/course evidence to improve local pattern analysis, tutoring, and simulation.
 
 ### Explicit Exclusions
 
@@ -31,6 +35,10 @@
 - Model-owned mastery promotion without a host policy.
 - Canonical publication of low-confidence extraction without review.
 - Broad curriculum RAG in the first revision.
+- Silent inference of a student's institution from an uploaded paper.
+- Automatic publication of uploads or model-only approval of contributions.
+- Acceptance of leaked, unreleased, access-controlled, personally identifying, or otherwise ineligible material.
+- Semantic similarity as an authorization, institution-assignment, or contribution-eligibility mechanism.
 
 ### Users and Interfaces
 
@@ -38,13 +46,15 @@
 - Desktop may show the source page and highlighted active region beside Atlas.
 - Mobile keeps the current chat-first layout with an optional question crop or source drawer.
 - Internal reviewers inspect low-confidence extraction and evaluation failures.
+- Contributors explicitly submit resources and confirm detected institution/course metadata.
+- Library reviewers inspect contribution rights, personal information, duplicates, metadata, and quality before publication.
 
 ## Success Contract
 
-- Expected inputs: Authenticated user, uploaded resource, selected learning scope, learner response, or submitted simulation.
-- Required outputs: Validated records, evidence-linked tutor turn, explicit learner-state decision, validated exam, marking result, or remediation assignment.
-- Success metrics: Extraction fidelity, grounding, mathematical correctness, grading agreement, progression precision, exam validity, latency, calls, and cost.
-- Critical failures: Tenant leak; corrupted source question; false teaching accepted as correct; unsupported mastery promotion; invalid exam; silent extraction loss; unbounded loop.
+- Expected inputs: Authenticated user, private upload, explicit contribution consent and metadata confirmation, selected learning scope, learner response, or submitted simulation.
+- Required outputs: Validated private records, governed library publication decision, contributor entitlement decision, evidence-linked tutor turn, learner-state decision, validated exam, marking result, or remediation assignment.
+- Success metrics: Extraction fidelity, grounding, contribution eligibility accuracy, privacy-redaction recall, duplicate detection, institutional routing precision, mathematical correctness, grading agreement, progression precision, exam validity, latency, calls, and cost.
+- Critical failures: Tenant leak; publication without explicit consent; publication of personal, leaked, or ineligible content; unauthorized library access; reward before acceptance; corrupted source question; false teaching accepted as correct; unsupported mastery promotion; invalid exam; silent extraction loss; unbounded loop.
 - Clarification conditions: Ambiguous region, unreadable source, unmatched concept, incomplete answer, or conflicting evidence.
 - Abstention conditions: Evidence cannot be recovered or verified above the workflow threshold.
 
@@ -68,11 +78,11 @@ Student UI (mobile chat or desktop resource-focus)
  Resource model     Learner state     Generate     Mark
       |                  |              |          |
       +---------> Pattern engine <-------+          |
-                         |                          |
-                         +----> Remediation <-------+
-                                      |
-                                      v
-                              New Atlas objective
+      |                  |                          |
+      v                  +----> Remediation <-------+
+ Contribution network               |
+      |                              v
+      +----> Institution library -> New Atlas objective
 ```
 
 ### Resource Ingestion Workflow
@@ -90,7 +100,9 @@ Every item retains resource, page, bounding box, extraction run, model/prompt ve
 
 ### Pattern Intelligence Workflow
 
-Patterns stays deterministic. It operates on normalized, reviewable records and creates immutable versioned snapshots. Inputs include canonical concept IDs, question hierarchy, marks, position, assessment type, and extraction confidence. Low-confidence data is excluded or weighted explicitly.
+Patterns stays deterministic. It operates on normalized, reviewable records and creates immutable versioned snapshots. Inputs include canonical concept IDs, question hierarchy, marks, position, assessment type, institution/course scope, rights/access status, and extraction confidence. Low-confidence or unapproved shared data is excluded or weighted explicitly.
+
+Personal snapshots use the student's authorized resources. Institution/course snapshots use only accepted library contributions. The source set and eligibility policy are recorded on every snapshot so lecturer-style and institutional claims remain explainable.
 
 ### Progressive Learning Workflow
 
@@ -138,6 +150,49 @@ Marking consumes the validated exam, canonical solution/mark scheme, student ans
 
 Weaknesses resolve to canonical concept IDs, not display-string matching. A remediation assignment stores the source exam/question, answer evidence, diagnosed error, target competency, and completion criteria. Atlas starts with that objective; reassessment closes or repeats it.
 
+### Governed Contribution Network
+
+Private upload and library contribution are separate workflows. Uploading never implies permission to share, pool, or redistribute a resource.
+
+```text
+Private resource
+      |
+      | student explicitly selects "Contribute"
+      v
+Consent and rights attestation
+      |
+      v
+Detect institution/course metadata
+      |
+      v
+Student confirms or corrects metadata
+      |
+      v
+Privacy scan + duplicate fingerprint + eligibility checks
+      |
+      v
+Manual review during initial rollout
+      |
+   +--+----------------+
+   |                   |
+ reject/quarantine     accept
+                       |
+                       +--> approved institution/course library
+                       +--> contributor benefit
+                       +--> institution pattern snapshot
+                                      |
+                                      +--> Atlas tutoring
+                                      +--> Exam simulation
+```
+
+Paper metadata may suggest an institution, but it does not establish that the uploader attends that institution. Store detected resource metadata separately from confirmed resource metadata and optional, explicitly declared student affiliation.
+
+An approved contribution records provenance, consent version, rights-attestation basis, review decision, duplicate family, personal-data scan, institution/course identifiers, allowed product uses, access policy, takedown status, and reward status. Contributor benefits are granted idempotently only after acceptance and can include simulation or marking credits, temporary premium access, or additional storage.
+
+Access to institution libraries is determined by explicit entitlements and deterministic metadata filters. Semantic search does not assign institutions, authorize access, or determine eligibility. If later introduced, hybrid retrieval operates only inside an already-authorized institution/course/resource set.
+
+Library withdrawal and takedown must immediately prevent new shared use while preserving the contributor's private copy only when they remain entitled to keep it. Derived institutional pattern snapshots need an explicit invalidation and recomputation policy when source eligibility changes.
+
 ## Context Plan
 
 | Context | Mechanism | Loaded when | Trust treatment |
@@ -150,6 +205,9 @@ Weaknesses resolve to canonical concept IDs, not display-string matching. A reme
 | Universal tutor policy | System policy | Every tutor call | Reviewed and versioned |
 | Pattern snapshot | Storage/resource | Exam generation | Immutable versioned input |
 | Canonical solution | Storage/resource | Marking | Validated before use |
+| Contribution consent and rights attestation | Storage | Contribution review | Versioned, explicit, auditable user declaration |
+| Institution/course metadata | Storage/resource | Contribution, patterns, access | Detected and user-confirmed values kept separate |
+| Approved library resource | Resource | Institution learning/simulation | Access-controlled; eligibility and takedown checked on every use |
 
 ## Capability Matrix
 
@@ -165,20 +223,26 @@ Weaknesses resolve to canonical concept IDs, not display-string matching. A reme
 | Generate exam | Workflow | User | Execute | Internal writes | Blueprint, schema, solver, and totals |
 | Mark exam | Workflow | User | Execute | Internal writes | Mark-scheme agreement and confidence |
 | Create remediation | Workflow | Application | Execute | Internal writes | Canonical concept and evidence linkage |
+| Submit contribution | Workflow | User | Write | Internal writes | Explicit consent, rights attestation, metadata confirmation, immutable submission |
+| Review contribution | Workflow | Reviewer/application | Execute | Internal writes | Privacy, duplicate, rights, eligibility, metadata, and quality checks |
+| Publish library resource | Workflow | Application | Write | Shared-library publication | Accepted review, access policy, provenance, and post-publication readback |
+| Grant contributor benefit | Workflow | Application | Write | Internal entitlement | Accepted contribution ID, idempotency key, and entitlement readback |
+| Read institution library | Resource | Application | Read | None | User entitlement, institution/course scope, source eligibility, and takedown status |
 
 ## Data and Trust Boundaries
 
-- Tenancy: Every resource, extraction run, session, attempt, exam, result, and remediation record is user-scoped. Identity comes from the verified token.
-- Sensitive data: Uploaded resources, answers, performance history, email, and inferred weaknesses.
-- Sources: Uploads, deterministic parsers, model outputs, student answers, and application taxonomy.
-- Retention/deletion: Define cascading account deletion before production; preserve only minimal versioned audit metadata without secrets.
+- Tenancy: Private resources and learning records remain user-scoped. Approved library resources occupy a separately authorized shared-library scope; publication never changes ownership or authorization implicitly. Identity comes from the verified token.
+- Sensitive data: Uploaded resources, answers, performance history, email, inferred weaknesses, institution/course metadata, optional declared affiliation, contribution consent, and review evidence.
+- Sources: Private uploads, explicit contribution submissions, deterministic parsers, model outputs, student confirmations, reviewer decisions, student answers, and application taxonomy.
+- Retention/deletion: Define cascading account deletion, contribution withdrawal, library takedown, entitlement reversal policy, and derived-snapshot invalidation before production; preserve only minimal versioned audit metadata without secrets.
 - External services: Model provider and deployment runtime; Supabase can remain Auth, Postgres, and Storage initially.
-- Untrusted boundaries: Documents, filenames, extracted text, model outputs, mathematical markup, tool arguments, and rendered HTML/SVG.
+- Untrusted boundaries: Documents, filenames, extracted text, detected institutional metadata, rights claims, model outputs, mathematical markup, tool arguments, and rendered HTML/SVG.
 
 ## Budgets and Stops
 
 - Tutor turn: normally one model call; three maximum including tools/repair.
 - Ingestion: three model calls maximum per document stage.
+- Contribution checks: normally deterministic; two bounded model calls maximum for privacy/metadata assistance, never for final authorization.
 - Exam generation: four calls maximum; marking: two.
 - Tool rounds: two maximum.
 - Interactive hard timeout: 60 seconds; background job attempt: five minutes.
@@ -190,26 +254,28 @@ Weaknesses resolve to canonical concept IDs, not display-string matching. A reme
 - Missing information: Clarify or mark incomplete; never invent source content.
 - Dependency failure: Preserve job state and offer safe retry.
 - Partial results: Store draft artifacts but do not publish incomplete canonical records.
-- Environment inspection: Check identity, ownership, current state, quota, and version before writes.
-- Postconditions: Read back and validate IDs, statuses, counts, links, and transitions.
+- Contribution failure: Keep the private resource usable by its owner, quarantine the submission, grant no reward, and disclose a reviewable reason.
+- Environment inspection: Check identity, ownership, explicit consent, rights/eligibility state, library entitlement, takedown status, current workflow state, quota, and version before reads or writes.
+- Postconditions: Read back and validate IDs, statuses, counts, publication visibility, entitlements, links, and transitions.
 - Audit: Record workflow, prompt, model, schema, referenced inputs, outputs, validators, latency, tokens, cost, and status.
 
 ## Evaluation Plan
 
 - Development dataset: `evals/datasets/development/` with reviewed documents, extraction truth, tutor turns, student answers, exam blueprints, questions, marking, and routing cases.
 - Held-out dataset: `evals/datasets/held-out/`, isolated from prompt development.
-- Deterministic graders: Schema validity, transcription distance, field accuracy, segmentation, taxonomy, state transitions, exam totals, duplicates, routing, authorization, and idempotency.
+- Deterministic graders: Schema validity, transcription distance, field accuracy, segmentation, taxonomy, state transitions, exam totals, contribution consent, personal-data detection, exact/near duplicate detection, institution/course routing, library authorization, takedown enforcement, reward idempotency, and storage idempotency.
 - Model graders: Pedagogical quality, hinting, explanation clarity, difficulty alignment, and feedback usefulness, calibrated against humans.
-- Human review: Mathematics educators assess fidelity, correctness, exam validity, marking agreement, and tricky-question transfer.
+- Human review: Mathematics educators assess fidelity, correctness, exam validity, marking agreement, and tricky-question transfer; contribution reviewers assess eligibility, metadata, privacy, provenance, and quality.
 - Metrics: Quality plus latency, calls, retries, tokens, cost, abstention, corrections, and tool failures.
-- Critical thresholds: Zero tenant leaks, unauthorized writes, silent source corruption, unsupported mastery promotion, invalid published schemas, and unbounded execution.
+- Critical thresholds: Zero tenant/library authorization leaks, publication without consent, accepted leaked or personally identifying content, premature rewards, unauthorized writes, silent source corruption, unsupported mastery promotion, invalid published schemas, and unbounded execution.
 - Reports: `evals/reports/<workflow>/<version>/report.html`.
 
 ## Rollout
 
 - Build domain schemas, deterministic functions, and evaluation fixtures first.
-- Shadow new extraction, assessment, and marking beside current behavior without updating learner state.
-- Roll out through internal fixtures, educators, a small student cohort, then broader cohorts.
+- Shadow new extraction, assessment, marking, institution detection, and duplicate/privacy checks beside current behavior without updating learner or library state.
+- Start contributions with manual review, one or two institution/course pilots, conservative eligibility, and no automatic publication.
+- Roll out through internal fixtures, educators/reviewers, a small student cohort, then broader institution cohorts.
 - Maintain per-workflow kill switches and last-known-good prompt/model/config versions.
 
 ## Residual Risks
@@ -218,6 +284,9 @@ Weaknesses resolve to canonical concept IDs, not display-string matching. A reme
 - Teaching and grading remain probabilistic after validation.
 - Curriculum taxonomy requires human governance.
 - Resource copyright, contribution, retention, and reuse require separate review.
+- Contributor rights attestations may be inaccurate; legal review and a responsive takedown process remain necessary.
+- Institution and lecturer metadata can create privacy, reputational, endorsement, and misclassification risk.
+- Incentives can attract spam, duplicates, manipulated documents, or leaked assessments.
 - Desktop highlighting depends on accurate region extraction.
 
 ## Deferred Capabilities
@@ -226,7 +295,7 @@ Weaknesses resolve to canonical concept IDs, not display-string matching. A reme
 |---|---|---|
 | General tool agent | Routes and transitions are known | Cases proving fixed/routed workflows cannot select valid tool sequences |
 | Multi-agent system | No measured isolation benefit | Stable parent contract plus measured specialist gain |
-| Broad RAG | Direct scoped resource lookup is enough initially | Retrieval evals showing scale requires indexing/ranking |
+| Broad RAG | Deterministic institution/course/resource filters and lexical lookup are more reliable initially | Retrieval evals showing authorized scoped lookup cannot find appropriate material |
 | Web search | Outside resource-grounded scope | Approved sourced-information feature and citation evals |
 | General code execution | Excess privilege | Reviewed tasks bounded math tools cannot handle |
 | Prompt caching | Prompts and traffic are not stable | Telemetry proving repeated prefixes and savings |
@@ -237,3 +306,7 @@ Weaknesses resolve to canonical concept IDs, not display-string matching. A reme
 - `engineer-and-evaluate-prompts`: extraction interpretation, tutoring, generation, and marking evals.
 - `build-anthropic-tool-agents`: only for bounded mathematics and visualization loops.
 - `build-and-evaluate-rag-agents`: deferred until retrieval scale demonstrates need.
+
+## Implementation Roadmap
+
+The phased work breakdown, dependency graph, parallel lanes, orchestration rules, and segment exit gates are maintained in [`implementation-roadmap.md`](implementation-roadmap.md).
