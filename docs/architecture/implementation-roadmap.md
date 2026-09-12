@@ -179,6 +179,8 @@ Freeze the shared language every later lane will use. This is the main sequentia
 ### Core entities
 
 - `resources`, `resource_pages`, `resource_regions`.
+- `resource_scope_snapshots`, `resource_scope_members`.
+- `study_spaces`, `learning_plans`, `learning_objectives`, `conversation_threads`, `conversation_episodes`.
 - `extraction_runs`, `extraction_artifacts`, `extraction_findings`.
 - `questions`, `question_parts`, `question_evidence`.
 - `institutions`, `courses`, `course_offerings`, `concepts`, `concept_aliases`, `question_concepts`.
@@ -198,6 +200,9 @@ Freeze the shared language every later lane will use. This is the main sequentia
 - Detected institution metadata, confirmed resource metadata, and optional student affiliation are separate fields.
 - Private ownership, shared-library eligibility, and library access are separate concepts.
 - Display labels never act as canonical identifiers.
+- Slash-command names map to versioned application commands; mention labels map to stable typed IDs and never carry authorization.
+- Study-space identity is separate from its current topic, learning layer, and conversation thread.
+- Resource-set scopes are immutable snapshots; refresh creates a new version rather than silently changing active coverage.
 
 ### API contracts
 
@@ -348,6 +353,11 @@ Decompose monolithic pages without prematurely changing learning behavior.
 - Preserve current mobile behavior through visual regression and journey tests.
 - Build desktop resource-focus layout behind a flag using region fixtures.
 - Create mock API adapters generated from S2 contracts.
+- Make the authenticated Atlas conversation shell the proposed primary surface behind a feature flag.
+- Add a discoverable command registry: `/recent`, `/resources`, `/upload`, `/progress`, and `/patterns` remain deterministic UI commands; `/learn`, `/quiz`, `/exam`, `/clarify`, `/next`, and `/variant` dispatch typed workflow commands.
+- Add a grouped `@` entity picker whose resource labels resolve to stable IDs and fresh authorization; defer canonical topic mentions until S7 taxonomy stability passes.
+- Render upload progress, recent study spaces, resource management, progress, patterns, and library results as application-owned cards/drawers rather than model prose.
+- Keep legacy Home, Upload, and Vault routes until their management and journey responsibilities have verified replacements.
 
 ### Verified simulator/progress-rail baseline
 
@@ -381,6 +391,8 @@ Implement this as a focused component extraction rather than a simulator rewrite
 - At desktop widths, collapsing the rail increases rather than decreases available workspace width, and progress navigation remains reachable while scrolling.
 - New components can run against fixtures without live model calls.
 - No new frontend feature performs privileged domain writes directly.
+- Explicit UI/navigation commands make zero model calls, and unknown commands fail closed with a discoverable supported-command list.
+- Renaming a resource does not break mention resolution, existing study spaces, or resume links.
 
 ### Parallelism
 
@@ -493,6 +505,11 @@ diagnosing -> teaching -> worked_example -> guided_attempt
 ### Work
 
 - Host-selected learning objective and source scope.
+- Durable study spaces bind a frozen authorized scope snapshot, goal, plan, current objective, attempts, and conversation episodes.
+- Resource progression plans cover accepted source questions and canonical concepts while tracking resource completion separately from global competency mastery.
+- Enforce explicit scope policies (`strict_resource`, `resource_mastery`, `resource_transfer`, and `collection_scope`) and prevent silent cross-scope retrieval.
+- Resume an existing compatible active plan idempotently; a different resource mention requires an explicit one-request reference or scope switch.
+- Build per-turn context from durable state and current evidence with bounded recent turns; roll long conversations into new episodes without treating summaries as state.
 - Deterministic question selection constraints with model assistance only where ambiguity remains.
 - Structured tutor-turn output: message, evidence anchors, assessment, error type, confidence, next activity, and proposed transition.
 - Host mastery policy using attempt evidence, independence, difficulty, recency, and transfer performance.
@@ -508,6 +525,8 @@ diagnosing -> teaching -> worked_example -> guided_attempt
 - A model cannot skip, invent, or persist a state transition directly.
 - Held-out educator review meets ratified correctness, pedagogy, assessment, and progression thresholds.
 - Mobile mode passes journey and accessibility tests.
+- A resource-scoped plan cannot select an unrelated curriculum objective, and every assessed item names its scope snapshot and source or labelled transfer provenance.
+- Long-history and device-switch tests resume the same study space, objective, evidence, and pending activity without replaying the full transcript.
 
 ### Parallelism
 
@@ -605,6 +624,8 @@ published -> withdrawn / takedown
 - Idempotent contributor rewards only after acceptance.
 - Takedown/withdrawal that blocks new shared use and invalidates derived snapshots.
 - Institution-specific Patterns snapshots and product analytics measuring contribution quality and network growth.
+- First-party `@public_library` search with bounded query-to-filter parsing followed by deterministic metadata/lexical search and explicit result selection.
+- A separately gated, read-only public Atlas MCP design for search, metadata, derived course patterns, authorized region reads, and Atlas study deep links.
 
 ### Required policy gate
 
@@ -617,6 +638,8 @@ Before implementation reaches publication, obtain reviewed policies for eligible
 - Personal-data and eligibility gates meet ratified release thresholds with manual review retained.
 - Duplicate submissions cannot create duplicate rewards.
 - Takedown removes shared availability and recomputes affected snapshots.
+- Public-library results cannot enter a private or institution-scoped study space without explicit selection and a fresh entitlement check.
+- No public MCP release occurs without protocol, authorization, rate-limit, provenance, copyright/allowed-use, abuse, and takedown evaluations.
 
 ### Parallelism
 
@@ -690,6 +713,8 @@ Parallel lanes:
 | Frontend | Resource-focus and learning components | Yes | S5 contracts |
 
 Integration gate: an accepted resource question with a page region starts a persisted learning objective, renders on mobile/desktop, records a structured attempt, and resumes identically.
+
+Chat-shell gate: `/learn @resource` resolves an authorized immutable scope, creates or resumes one compatible study space idempotently, advances only through that scope's accepted coverage, rolls conversation episodes without losing state, and makes zero model calls for explicit UI commands.
 
 ## Wave C — Intelligence and Assessment
 
@@ -802,7 +827,8 @@ Outcome:
 
 ```text
 upload -> accepted extraction -> highlighted question
-       -> progressive Atlas session -> structured attempt
+       -> immutable @resource scope -> durable study space
+       -> progressive Atlas objective -> structured attempt
        -> persisted learner state -> reliable resume
 ```
 
@@ -831,3 +857,4 @@ Only after these slices are stable should S12 turn resource quality into the ins
 - Multiple agents/subagents: defer until fixed/routed workflows fail because valid tool sequences are genuinely dynamic.
 - Prompt caching: defer until stable prompts and repeated-prefix telemetry demonstrate material savings.
 - Automatic contribution approval: defer indefinitely until manual-review evidence supports a narrowly scoped safe class.
+- Public Atlas MCP: defer external release until the governed first-party library passes licensing, entitlement, provenance, abuse, protocol, rate-limit, and takedown gates; begin read-only.

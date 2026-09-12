@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "agent_id": "atlas-learning-system",
-  "version": "0.2.0-design",
+  "version": "0.3.0-design",
   "objective": "Turn private and explicitly contributed mathematics resources into reliable progressive teaching, assessment, simulation, remediation, and institution-specific learning intelligence.",
   "risk_level": "high",
   "architecture": {
@@ -17,6 +17,10 @@
   "capabilities": [
     {"id":"ingest-resource","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Verify ownership, idempotency, schemas, counts, and evidence anchors.","owner_skill":"build-and-evaluate-vision-agents","rationale":"Ingestion requires durable staged processing."},
     {"id":"read-resource-evidence","kind":"resource","initiator":"application","access":"read","side_effect":false,"consequence":"none","approval":"none","verification":"Verify tenant, resource, page, region, and extraction version.","owner_skill":"build-and-evaluate-vision-agents","rationale":"Teaching and highlighting must remain grounded."},
+    {"id":"route-slash-command","kind":"workflow","initiator":"user","access":"execute","side_effect":false,"consequence":"none","approval":"none","verification":"Verify command registry entry, typed arguments, active workflow state, and selected route without a model call.","owner_skill":null,"rationale":"A minimal command surface must remain deterministic and discoverable."},
+    {"id":"resolve-resource-mention","kind":"resource","initiator":"user","access":"read","side_effect":false,"consequence":"none","approval":"none","verification":"Resolve the friendly token to a stable typed ID, then verify tenant or library authorization, status, version, and takedown state.","owner_skill":null,"rationale":"Mentions select authorized context without inserting whole documents or trusting display names."},
+    {"id":"create-or-resume-study-space","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Verify immutable scope snapshot, goal, scope policy, active-plan uniqueness, idempotency, and persisted readback.","owner_skill":null,"rationale":"Resource progression and resume must survive thread rollover and device changes."},
+    {"id":"search-public-library","kind":"workflow","initiator":"user","access":"read","side_effect":false,"consequence":"none","approval":"none","verification":"Validate allowlisted filters, entitlement, approved source status, allowed use, provenance, and takedown state before rendering results.","owner_skill":null,"rationale":"Public discovery should use bounded parsing plus deterministic metadata and lexical search."},
     {"id":"normalize-concepts","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Validate canonical IDs, aliases, confidence, evidence, and taxonomy version.","owner_skill":"engineer-and-evaluate-prompts","rationale":"Canonical concepts prevent fragmented routing."},
     {"id":"analyze-patterns","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Run deterministic fixtures and store an immutable snapshot.","owner_skill":null,"rationale":"Patterns are reproducible high-value application logic."},
     {"id":"produce-tutor-turn","kind":"workflow","initiator":"application","access":"execute","side_effect":true,"consequence":"internal","approval":"none","verification":"Validate structured output, evidence, confidence, and transition before persistence.","owner_skill":"engineer-and-evaluate-prompts","rationale":"Tutoring needs bounded interpretation and durable state."},
@@ -33,9 +37,9 @@
   "data": {
     "tenant_scoped": true,
     "sensitive": true,
-    "sources": ["student uploaded PDFs and images","explicit contribution consent and rights attestations","confirmed institution and course metadata","reviewer decisions","approved institution library resources","student answers and learning history","deterministic processors","versioned model outputs","application curriculum taxonomy"],
+    "sources": ["student uploaded PDFs and images","immutable authorized resource-scope snapshots","durable study spaces, progression plans, objectives, attempts, and conversation episodes","explicit contribution consent and rights attestations","confirmed institution and course metadata","reviewer decisions","approved institution library resources","student answers and learning history","deterministic processors","versioned model outputs","application curriculum taxonomy"],
     "retention": "Define cascading account deletion, contribution withdrawal, library takedown, entitlement policy, and derived-snapshot invalidation before production; retain only minimal versioned audit references without secrets.",
-    "trust_boundaries": ["student browser","private user resource scope","contribution review queue","approved shared institution library","library consumers and entitlements","authenticated application API","background workers","Supabase","model provider","untrusted uploaded and generated content"]
+    "trust_boundaries": ["student browser and command surface","mention resolver and immutable scope snapshots","private user resource scope","conversation episodes and durable study-space state","contribution review queue","approved shared institution library","public-library and future MCP consumers","library consumers and entitlements","authenticated application API","background workers","Supabase","model provider","untrusted uploaded and generated content"]
   },
   "budgets": {"max_model_calls":4,"max_tool_rounds":2,"timeout_seconds":300,"max_input_tokens":100000,"max_output_tokens":12000,"cost_limit_usd":1.0},
   "policies": {
@@ -48,8 +52,8 @@
   "evaluation": {
     "development_dataset":"evals/datasets/development/",
     "held_out_dataset":"evals/datasets/held-out/",
-    "metrics":["extraction accuracy","segmentation accuracy","contribution eligibility and metadata accuracy","personal-data detection recall","duplicate detection precision and recall","institution library authorization accuracy","taxonomy and remediation routing accuracy","mathematical correctness","answer-grading agreement","mastery progression precision","exam validity and marking agreement","latency, calls, tokens, cost, retries, and abstentions"],
-    "critical_failures":["cross-tenant or library access","publication without explicit consent","publication of leaked, personally identifying, or ineligible content","reward before contribution acceptance","unauthorized write","silent source corruption","false mathematics accepted as correct","unsupported mastery promotion","invalid published exam","unbounded execution"],
+    "metrics":["command parse and route accuracy","mention resolution and rename stability","scope-freezing and study-space resume accuracy","cross-scope contamination rate","extraction accuracy","segmentation accuracy","contribution eligibility and metadata accuracy","personal-data detection recall","duplicate detection precision and recall","institution library authorization accuracy","taxonomy and remediation routing accuracy","mathematical correctness","answer-grading agreement","mastery progression precision","exam validity and marking agreement","latency, calls, tokens, cost, retries, and abstentions"],
+    "critical_failures":["cross-tenant or library access","cross-scope evidence contamination","model-authorized explicit command","duplicate active study plan from a retried resume","publication without explicit consent","publication of leaked, personally identifying, or ineligible content","reward before contribution acceptance","unauthorized write","silent source corruption","false mathematics accepted as correct","unsupported mastery promotion","invalid published exam","unbounded execution"],
     "held_out_required":true,
     "html_report":true
   },
@@ -58,7 +62,8 @@
     {"capability":"multi-agent delegation","reason":"No measured isolation or specialization benefit.","evidence_to_add":"Stable parent contract and measured specialist improvement."},
     {"capability":"broad curriculum RAG","reason":"Deterministic institution, course, resource, concept, and access filters plus lexical lookup are more reliable initially.","evidence_to_add":"Retrieval evals showing authorized scoped lookup cannot find appropriate material."},
     {"capability":"open web search","reason":"Outside the resource-grounded scope.","evidence_to_add":"Approved sourced-information feature with citation evals."},
-    {"capability":"general code execution","reason":"Unnecessary authority for tutoring.","evidence_to_add":"Reviewed tasks bounded math tools cannot solve."}
+    {"capability":"general code execution","reason":"Unnecessary authority for tutoring.","evidence_to_add":"Reviewed tasks bounded math tools cannot solve."},
+    {"capability":"public Atlas MCP","reason":"External protocol access is deferred until the governed first-party library passes licensing, entitlement, provenance, abuse, rate-limit, and takedown gates.","evidence_to_add":"Read-only MCP protocol and authorization evals over an approved library pilot."}
   ],
-  "residual_risks": ["Ambiguous scans and handwriting","Probabilistic teaching and grading","Taxonomy governance","Inaccurate contributor rights attestations and takedown exposure","Institution and lecturer privacy or misclassification","Incentive-driven spam, duplicates, manipulation, or leaked assessments","Highlighting depends on region accuracy"]
+  "residual_risks": ["Ambiguous scans and handwriting","Probabilistic teaching and grading","Taxonomy governance","Command discoverability and answer-versus-clarification ambiguity","Mention collisions, stale scope snapshots, and cross-scope contamination","Long visible histories diverging from bounded model context","Inaccurate contributor rights attestations and takedown exposure","Institution and lecturer privacy or misclassification","Public-library and future MCP abuse or copyright exposure","Incentive-driven spam, duplicates, manipulation, or leaked assessments","Highlighting depends on region accuracy"]
 }

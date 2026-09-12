@@ -25,6 +25,9 @@
 - Review, deduplicate, de-identify, approve, and publish eligible resources into institution/course libraries.
 - Grant contributor benefits only after a contribution is accepted.
 - Use approved institution/course evidence to improve local pattern analysis, tutoring, and simulation.
+- Present Atlas as a chat-first product shell whose slash commands invoke allowlisted application workflows without a model call where interpretation is unnecessary.
+- Resolve `@` mentions to authorized, immutable resource-scope snapshots and keep resource-scoped learning inside their accepted coverage.
+- Resume a durable study space and progression plan independently of conversation length or device.
 
 ### Explicit Exclusions
 
@@ -32,6 +35,9 @@
 - Autonomous multi-agent delegation.
 - Open-ended web search or unsourced curriculum expansion.
 - Conversation history as durable learner state.
+- Sending slash commands to a model and treating its interpretation as workflow authorization.
+- Expanding an `@` mention into an entire document or trusting a display name as a resource identifier.
+- Silently blending private, contributed, public-library, or newly uploaded resources into an active study scope.
 - Model-owned mastery promotion without a host policy.
 - Canonical publication of low-confidence extraction without review.
 - Broad curriculum RAG in the first revision.
@@ -45,6 +51,7 @@
 - Students use a responsive web application on mobile and desktop.
 - Desktop may show the source page and highlighted active region beside Atlas.
 - Mobile keeps the current chat-first layout with an optional question crop or source drawer.
+- After authentication, the Atlas conversation shell becomes the primary product surface; application-rendered cards and drawers provide upload, recent study spaces, resources, progress, patterns, and library results.
 - Internal reviewers inspect low-confidence extraction and evaluation failures.
 - Contributors explicitly submit resources and confirm detected institution/course metadata.
 - Library reviewers inspect contribution rights, personal information, duplicates, metadata, and quality before publication.
@@ -60,10 +67,16 @@
 
 ## Architecture
 
-Atlas remains one product identity, not one runtime agent. An authenticated API selects an allowlisted workflow from an explicit UI action. No model chooses between product workflows.
+Atlas remains one product identity, not one runtime agent. A deterministic interaction router handles explicit slash commands and resolved mentions before an authenticated API selects an allowlisted workflow. No model authorizes or directly chooses between product workflows.
 
 ```text
-Student UI (mobile chat or desktop resource-focus)
+Atlas conversation shell
+  / command = reviewed workflow
+  @ mention = authorized resource scope
+  plain text = goal, question, working, or answer
+                         |
+                         v
+       Deterministic command + mention resolver
                          |
                          v
               Authenticated API / Router
@@ -84,6 +97,45 @@ Student UI (mobile chat or desktop resource-focus)
       |                              v
       +----> Institution library -> New Atlas objective
 ```
+
+### Chat Shell, Commands and Mentions
+
+The simple interface is a shell over separate application workflows, not a single unbounded chat. Typing `/` opens a discoverable command menu. Explicit UI commands such as `/recent`, `/resources`, `/upload`, `/progress`, and `/patterns` render application data and make no model call. Learning commands such as `/learn`, `/quiz`, `/exam`, and `/variant` create typed commands whose arguments and current workflow state are validated by the host.
+
+The interaction grammar is deliberately small:
+
+```text
+/command     = what Atlas should do
+@mention     = what authorized evidence Atlas should use
+normal text  = the student's goal, working, answer, or question
+```
+
+An `@` token is a typed UI entity. Its friendly label resolves server-side to a stable resource, collection, canonical concept, or library-scope identifier. Renames do not change identity; duplicate labels are disambiguated in the picker. Filenames, labels, document text, and public-library results remain untrusted content. A mention never grants access and never pastes a full resource into the prompt.
+
+Changing scope is explicit. A different resource mentioned inside an active study space is either a one-request reference or the start of a separately confirmed scope change; it cannot silently alter plan coverage. `@all_my_papers` and multi-resource selections are frozen as versioned scope snapshots so later uploads do not change an active plan without an explicit refresh.
+
+### Resource-Scoped Study Spaces
+
+The durable unit is a study space, not a topic-labelled conversation. A study space binds an authenticated student, immutable authorized scope snapshot, goal type, progression plan, and active objective. Topics and learning layers are cursors inside that plan. Conversation episodes are replaceable presentation history.
+
+```text
+Study space: @Math_1110_2021
+  Goal: master this paper
+  Scope policy: resource_mastery
+       |
+       +-- objective: Differentiation / First Principles / drills
+       +-- objective: Trigonometry / Identities / foundation
+       +-- objective: Polynomials / Factor Theorem / not started
+       +-- attempts and mastery evidence
+       +-- conversation episodes
+       +-- resource coverage and completion
+```
+
+Supported scope policies are explicit: `strict_resource` permits only accepted source questions and concepts; `resource_mastery` permits generated teaching and practice inside the resource's concept envelope; `resource_transfer` additionally permits a labelled, slightly harder transfer item; `collection_scope` operates over a frozen authorized resource set. Mathematical explanations may use model knowledge, but curriculum coverage, assessment selection, and lecturer-style claims remain constrained to accepted evidence.
+
+`/recent` lists resumable study spaces or plans rather than deduplicated topics. Mentioning a resource with one active compatible plan offers resume, progress review, or a different goal instead of creating a duplicate. Resource management remains available through a deterministic `/resources` surface even if the legacy Vault page disappears from primary navigation.
+
+The visible history may span months, but each model turn receives only universal policy, the active scope manifest, current objective and learner state, current source evidence, relevant attempts, a bounded recent-turn window, and an optional derived summary. Thread rollover creates a new conversation episode without changing the study space. Chat history and summaries never become the source of truth for progress or mastery.
 
 ### Resource Ingestion Workflow
 
@@ -114,6 +166,8 @@ diagnose -> teach -> worked example -> guided attempt -> independent attempt
 ```
 
 The six existing layer names can remain, but advancement depends on structured evidence rather than a manual Next button. Each tutor turn returns pedagogical content, source anchors, answer assessment, error type, confidence, learner-state proposal, next activity, and an allowed transition. The host validates and writes state.
+
+During an active question, ordinary input defaults to student working. `/clarify`, `/next`, and `/variant` are deterministic intent overrides exposed through a discoverable menu; progression layers such as drills remain host-owned states rather than model-selected navigation. A context-sensitive Continue action may remain when it reduces effort, but a permanent five-button mobile toolbar is unnecessary.
 
 Optional model-requested tools are limited to deterministic mathematics, allowlisted resource reads, and visualization. The model receives no unrestricted database write tools.
 
@@ -191,6 +245,10 @@ An approved contribution records provenance, consent version, rights-attestation
 
 Access to institution libraries is determined by explicit entitlements and deterministic metadata filters. Semantic search does not assign institutions, authorize access, or determine eligibility. If later introduced, hybrid retrieval operates only inside an already-authorized institution/course/resource set.
 
+`@public_library` is initially a search scope. A bounded parser may translate natural language into allowlisted institution, course, document-type, and year filters, after which deterministic metadata and lexical search run inside the authorized catalog. A selected result becomes a separately authorized resource scope; search results never contaminate a private study space automatically.
+
+A public Atlas MCP is a later, read-only distribution surface over the governed library, not a launch dependency. Candidate capabilities include library search, resource metadata, course patterns, available topics, authorized region reads, and Atlas study deep links. It must enforce the same provenance, licensing, entitlement, takedown, tenant, rate-limit, and audit policies as the first-party application. Full copyrighted resources are not exposed unless their recorded allowed-use policy permits it.
+
 Library withdrawal and takedown must immediately prevent new shared use while preserving the contributor's private copy only when they remain entitled to keep it. Derived institutional pattern snapshots need an explicit invalidation and recomputation policy when source eligibility changes.
 
 ## Context Plan
@@ -202,6 +260,11 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 | Canonical concept | Storage/resource | Classification and learning | Versioned application data |
 | Learner state | Storage | Tutor/remediation turn | Durable, tenant-scoped, host-updated |
 | Recent interaction | Request prompt | Tutor turn | Trimmed untrusted text |
+| Slash command | Deterministic command registry | Explicit user selection | Parsed and validated before routing; never model authorization |
+| Mention token | Application entity resolver | Scope selection or bounded reference | Stable ID, fresh authorization, display label untrusted |
+| Scope snapshot | Storage/resource | Study-space creation and every scoped turn | Immutable authorized resource versions and policy |
+| Study space and progression plan | Storage | Resume, tutoring, remediation | Durable host-owned state; conversation-independent |
+| Conversation summary | Derived storage | Only when relevant after thread rollover | Convenience context, never mastery authority |
 | Universal tutor policy | System policy | Every tutor call | Reviewed and versioned |
 | Pattern snapshot | Storage/resource | Exam generation | Immutable versioned input |
 | Canonical solution | Storage/resource | Marking | Validated before use |
@@ -215,6 +278,10 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 |---|---|---|---|---|---|
 | Ingest resource | Workflow | Application | Execute | Internal writes | Idempotency, schemas, counts, evidence anchors |
 | Read evidence | Resource | Application | Read | None | Tenant and anchor validation |
+| Route slash command | Deterministic code | User/UI | Execute | None or typed internal command | Registry, argument schema, active-state and route validation |
+| Resolve resource mention | Resource | User/UI | Read | None | Stable ID, tenant/library authorization, status and version |
+| Create/resume study space | Workflow | User/application | Execute | Internal writes | Scope snapshot, goal, idempotency, active-plan uniqueness and readback |
+| Search public library | Routed workflow | User | Read | None | Allowlisted filters, entitlement, source eligibility and takedown status |
 | Normalize concepts | Workflow | Application | Execute | Internal writes | Taxonomy version and confidence |
 | Analyze patterns | Workflow | Application | Execute | Internal writes | Deterministic fixtures and snapshot hash |
 | Produce tutor turn | Workflow | Application | Execute | Internal writes | Output schema and transition policy |
@@ -232,7 +299,7 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 ## Data and Trust Boundaries
 
 - Tenancy: Private resources and learning records remain user-scoped. Approved library resources occupy a separately authorized shared-library scope; publication never changes ownership or authorization implicitly. Identity comes from the verified token.
-- Sensitive data: Uploaded resources, answers, performance history, email, inferred weaknesses, institution/course metadata, optional declared affiliation, contribution consent, and review evidence.
+- Sensitive data: Uploaded resources, scope selections, study-space history, answers, performance history, email, inferred weaknesses, institution/course metadata, optional declared affiliation, contribution consent, and review evidence.
 - Sources: Private uploads, explicit contribution submissions, deterministic parsers, model outputs, student confirmations, reviewer decisions, student answers, and application taxonomy.
 - Retention/deletion: Define cascading account deletion, contribution withdrawal, library takedown, entitlement reversal policy, and derived-snapshot invalidation before production; preserve only minimal versioned audit metadata without secrets.
 - External services: Model provider and deployment runtime; Supabase can remain Auth, Postgres, and Storage initially.
@@ -241,6 +308,7 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 ## Budgets and Stops
 
 - Tutor turn: normally one model call; three maximum including tools/repair.
+- Explicit navigation commands and mention resolution: zero model calls. Ambiguous natural-language routing: at most one bounded classification call followed by host validation.
 - Ingestion: three model calls maximum per document stage.
 - Contribution checks: normally deterministic; two bounded model calls maximum for privacy/metadata assistance, never for final authorization.
 - Exam generation: four calls maximum; marking: two.
@@ -263,11 +331,11 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 
 - Development dataset: `evals/datasets/development/` with reviewed documents, extraction truth, tutor turns, student answers, exam blueprints, questions, marking, and routing cases.
 - Held-out dataset: `evals/datasets/held-out/`, isolated from prompt development.
-- Deterministic graders: Schema validity, transcription distance, field accuracy, segmentation, taxonomy, state transitions, exam totals, contribution consent, personal-data detection, exact/near duplicate detection, institution/course routing, library authorization, takedown enforcement, reward idempotency, and storage idempotency.
+- Deterministic graders: Command parsing, mention resolution, rename stability, active-plan idempotency, scope freezing, schema validity, transcription distance, field accuracy, segmentation, taxonomy, state transitions, exam totals, contribution consent, personal-data detection, exact/near duplicate detection, institution/course routing, library authorization, takedown enforcement, reward idempotency, and storage idempotency.
 - Model graders: Pedagogical quality, hinting, explanation clarity, difficulty alignment, and feedback usefulness, calibrated against humans.
 - Human review: Mathematics educators assess fidelity, correctness, exam validity, marking agreement, and tricky-question transfer; contribution reviewers assess eligibility, metadata, privacy, provenance, and quality.
 - Metrics: Quality plus latency, calls, retries, tokens, cost, abstention, corrections, and tool failures.
-- Critical thresholds: Zero tenant/library authorization leaks, publication without consent, accepted leaked or personally identifying content, premature rewards, unauthorized writes, silent source corruption, unsupported mastery promotion, invalid published schemas, and unbounded execution.
+- Critical thresholds: Zero tenant/library authorization leaks, cross-scope evidence contamination, model-authorized commands, publication without consent, accepted leaked or personally identifying content, premature rewards, unauthorized writes, silent source corruption, unsupported mastery promotion, invalid published schemas, and unbounded execution.
 - Reports: `evals/reports/<workflow>/<version>/report.html`.
 
 ## Rollout
@@ -275,6 +343,9 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 - Build domain schemas, deterministic functions, and evaluation fixtures first.
 - Shadow new extraction, assessment, marking, institution detection, and duplicate/privacy checks beside current behavior without updating learner or library state.
 - Start contributions with manual review, one or two institution/course pilots, conservative eligibility, and no automatic publication.
+- Introduce the command registry and mention picker alongside existing navigation, measure discoverability and routing, then remove redundant mobile controls and make chat the authenticated landing shell only after journey parity passes.
+- Replace topic-deduplicated recent sessions with study-space resume cards; keep the legacy Vault route available until resource management, scope selection, and start/resume parity are verified.
+- Pilot first-party public-library search before exposing a read-only public MCP; add external access only after licensing, entitlement, protocol, abuse, and takedown gates pass.
 - Roll out through internal fixtures, educators/reviewers, a small student cohort, then broader institution cohorts.
 - Maintain per-workflow kill switches and last-known-good prompt/model/config versions.
 
