@@ -98,6 +98,22 @@ Atlas conversation shell
       +----> Institution library -> New Atlas objective
 ```
 
+### Implementation Delivery Model
+
+Contract work freezes incrementally rather than as one programme-wide schema event:
+
+```text
+S2A common platform
+  +--> S2B resources/evidence
+  +--> S2C learning
+  +--> S2D assessment
+  +--> S2E contribution/library
+```
+
+A lane may build against fixtures when every pack it consumes is frozen. Live integration additionally requires accepted upstream behavior. Release additionally requires held-out, security, operational, rollback, and workflow-specific gates. Unrelated future packs cannot block the first resource-to-learning slice.
+
+Evaluation baseline and dataset-governance work begins during current-system inventory. Harness implementation expands as each contract pack freezes. Migration and rollout are continuous per-workflow activities; an unfinished contribution network cannot block release of an independently accepted private-learning workflow.
+
 ### Chat Shell, Commands and Mentions
 
 The simple interface is a shell over separate application workflows, not a single unbounded chat. Typing `/` opens a discoverable command menu. Explicit UI commands such as `/recent`, `/resources`, `/upload`, `/progress`, and `/patterns` render application data and make no model call. Learning commands such as `/learn`, `/quiz`, `/exam`, and `/variant` create typed commands whose arguments and current workflow state are validated by the host.
@@ -307,14 +323,15 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 
 ## Budgets and Stops
 
+- Manifest budgets are absolute per-workflow-execution ceilings. Route configuration may only lower them. Initial, verification, repair, and tool-follow-up model calls all consume the same execution budget; a stage, branch, batch, or page boundary never resets it.
 - Tutor turn: normally one model call; three maximum including tools/repair.
 - Explicit navigation commands and mention resolution: zero model calls. Ambiguous natural-language routing: at most one bounded classification call followed by host validation.
-- Ingestion: three model calls maximum per document stage.
+- Ingestion: three model calls maximum per document execution, including verification and repair.
 - Contribution checks: normally deterministic; two bounded model calls maximum for privacy/metadata assistance, never for final authorization.
 - Exam generation: four calls maximum; marking: two.
 - Tool rounds: two maximum.
 - Interactive hard timeout: 60 seconds; background job attempt: five minutes.
-- Cost and concurrency: tier-specific limits checked atomically.
+- Cost and concurrency: tier-specific limits checked atomically; initial process-local parallel-branch ceiling is four and routes may lower it.
 - Retry policy: Retry transient failures idempotently; allow one invalid-output repair, then fail or review.
 
 ## Failure and Approval Policy
@@ -322,6 +339,7 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 - Missing information: Clarify or mark incomplete; never invent source content.
 - Dependency failure: Preserve job state and offer safe retry.
 - Partial results: Store draft artifacts but do not publish incomplete canonical records.
+- Parallel branches: Declare stable branch names, required versus optional status, bounded concurrency, deterministic aggregation order, cancellation behavior, and whether completed outputs remain usable. Required-branch failure fails closed by default. Explicitly permitted partial results remain labelled degraded, retain branch errors, and cannot silently advance canonical state.
 - Contribution failure: Keep the private resource usable by its owner, quarantine the submission, grant no reward, and disclose a reviewable reason.
 - Environment inspection: Check identity, ownership, explicit consent, rights/eligibility state, library entitlement, takedown status, current workflow state, quota, and version before reads or writes.
 - Postconditions: Read back and validate IDs, statuses, counts, publication visibility, entitlements, links, and transitions.
@@ -335,12 +353,13 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 - Model graders: Pedagogical quality, hinting, explanation clarity, difficulty alignment, and feedback usefulness, calibrated against humans.
 - Human review: Mathematics educators assess fidelity, correctness, exam validity, marking agreement, and tricky-question transfer; contribution reviewers assess eligibility, metadata, privacy, provenance, and quality.
 - Metrics: Quality plus latency, calls, retries, tokens, cost, abstention, corrections, and tool failures.
-- Critical thresholds: Zero tenant/library authorization leaks, cross-scope evidence contamination, model-authorized commands, publication without consent, accepted leaked or personally identifying content, premature rewards, unauthorized writes, silent source corruption, unsupported mastery promotion, invalid published schemas, and unbounded execution.
+- Critical thresholds: Zero tenant/library authorization leaks, cross-scope evidence contamination, model-authorized commands, publication without consent, accepted leaked or personally identifying content, premature rewards, unauthorized writes, silent source corruption, unsupported mastery promotion, invalid published schemas, accepted aggregates after required-branch failure, budget resets across stage/page boundaries, and unbounded execution.
 - Reports: `evals/reports/<workflow>/<version>/report.html`.
 
 ## Rollout
 
 - Build domain schemas, deterministic functions, and evaluation fixtures first.
+- Freeze only the contract packs required by the next vertical slice; do not wait for unrelated assessment or network packs.
 - Shadow new extraction, assessment, marking, institution detection, and duplicate/privacy checks beside current behavior without updating learner or library state.
 - Start contributions with manual review, one or two institution/course pilots, conservative eligibility, and no automatic publication.
 - Introduce the command registry and mention picker alongside existing navigation, measure discoverability and routing, then remove redundant mobile controls and make chat the authenticated landing shell only after journey parity passes.
@@ -348,6 +367,7 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 - Pilot first-party public-library search before exposing a read-only public MCP; add external access only after licensing, entitlement, protocol, abuse, and takedown gates pass.
 - Roll out through internal fixtures, educators/reviewers, a small student cohort, then broader institution cohorts.
 - Maintain per-workflow kill switches and last-known-good prompt/model/config versions.
+- Run migration, reconciliation, shadowing, cohort enablement, rollback rehearsal, and legacy retirement per workflow throughout delivery rather than as one final programme event.
 
 ## Residual Risks
 
@@ -372,6 +392,10 @@ Library withdrawal and takedown must immediately prevent new shared use while pr
 | Prompt caching | Prompts and traffic are not stable | Telemetry proving repeated prefixes and savings |
 
 ## Specialist Skills for Implementation
+
+### Python-agents reference boundary
+
+`C:\Users\Lusa\python-agents` is a read-only teaching and implementation reference, not an Atlas package or runtime dependency. Atlas must not edit or directly import it. Implement the necessary patterns locally with provider-independent orchestration, thin model adapters, named validated chain steps, closed routing, bounded parallel aggregation, finite repair loops, matched tool-result IDs, and plain-function tests. Comments and docstrings explain intent, invariants, failure policy, and non-obvious constraints rather than restating code.
 
 - `build-and-evaluate-vision-agents`: page/region evidence and OCR evaluation.
 - `engineer-and-evaluate-prompts`: extraction interpretation, tutoring, generation, and marking evals.

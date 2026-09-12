@@ -22,6 +22,27 @@ The governing rule is:
 8. Build evaluation datasets before optimizing prompts.
 9. Use shadow mode before a new workflow can update learner or library state.
 10. Prefer one modular service and one worker deployment before introducing microservices, Redis, event streaming, RAG, or multiple agents.
+11. Keep orchestration provider-independent and model adapters thin; use `C:\Users\Lusa\python-agents` as a read-only implementation reference, never as a runtime dependency or an edited library.
+12. Distinguish permission to begin fixture-backed implementation from permission to integrate live dependencies and permission to release.
+
+## Pre-S0 — Executable Design Gate
+
+Before S0 begins, the design package must be usable as an implementation control rather than only an architectural narrative.
+
+### Required outcomes
+
+- The domain contracts are divided into independently frozen packs so unrelated future work cannot block the first vertical slice.
+- Every dependency is labelled as a **build**, **live-integration**, or **release** dependency.
+- Evaluation case capture begins with the current-system baseline, before prompts or model routes change.
+- Every workflow declares its sequential steps, safe parallel branches, aggregation rule, failure policy, retry/repair limit, and route-specific budget.
+- The Python-agents workflow patterns are adopted as a reference standard while that repository remains read-only and outside Atlas runtime imports.
+- `agent-manifest.json` validates and the regenerated `agent-design.html` is reviewed before implementation starts.
+
+### Exit gate
+
+- A work owner can tell exactly what may start, what may connect to live state, and what may ship without interpreting an ambiguous arrow.
+- The first required contract packs are identified, while later assessment and network contracts remain non-blocking.
+- The design artifacts agree on architecture, budgets, failure semantics, evaluation timing, and rollout order.
 
 ## 3. Target Runtime Shape
 
@@ -56,50 +77,56 @@ Initial deployment recommendation:
 - Postgres-backed jobs/outbox initially; add a separate queue only after measured throughput or latency requires it.
 - Vercel: React frontend until a concrete reason to move it appears.
 
-## 4. Dependency Graph
+## 4. Dependency Model
+
+Dependencies have three meanings and must not be collapsed into one project arrow:
+
+| Dependency | Meaning | Default evidence |
+|---|---|---|
+| Build | Work may begin against frozen contracts and fixtures. | Contract tests and checked fixtures |
+| Live integration | The implementation may read or write a live upstream workflow. | Upstream exit gate and integration tests |
+| Release | The capability may be enabled for a cohort. | Held-out evals, operational gates, rollback and kill switch |
 
 ```text
+Pre-S0 executable design gate
+ |
+ v
 S0 Programme controls and baseline
  |
  v
 S1 Reproducible database, security and current-system stabilization
  |
  v
-S2 Domain model and versioned contracts -----------------------------+
- |                                                                  |
- +----------------------+----------------------+--------------------+
- |                      |                      |                    |
- v                      v                      v                    v
-S3 Backend/runtime     S4 Eval harness       S5 Frontend shell    Migration fixtures
- |                      |                      |                    |
- +-----------+----------+                      |                    |
-             |                                 |                    |
-             v                                 |                    |
-       S6 Ingestion/OCR v2 <-------------------+                    |
-             |                                                      |
-             v                                                      |
-       S7 Review + taxonomy normalization                            |
-             |                                                      |
-        +----+-------------------------+                            |
-        |                              |                            |
-        v                              v                            |
-  S8 Patterns v2                 S9 Learning/mastery v2 <-----------+
-        |                              |
-        v                              +----------+
-  S10 Exam generation                           |
-        |                                        |
-        +------------------+---------------------+
-                           v
-                  S11 Marking + remediation
-                           |
-                           v
-                  S12 Contribution network
-                           |
-                           v
-                  S13 Cutover and production rollout
+S2A common platform contracts
+ |
+ +--> S2B resource/evidence --> S6 ingestion --> S7 review/taxonomy --> S8 patterns --> S10 exam --> S11
+ +--> S2C learning ---------------------------------------------------------------> S9 learning -----> S11
+ +--> S2D assessment ---------------------------------------------------------> S10/S11 contracts
+ +--> S2E network ------------------------------------------------------------> S12 preparation
+
+S3 platform, S4 evaluation, S5 frontend, migration and rollout run as cross-cutting lanes
+after their required contract packs freeze. S13 cutover runs per accepted vertical slice;
+it does not wait for S12.
 ```
 
-The diagram shows minimum dependencies, not a mandate to wait unnecessarily. Several segments can build against frozen fixtures before upstream live integration is available.
+The diagram shows product-data ordering. The tables in the delivery waves are authoritative for build, live-integration, and release permission. Several segments can build against frozen fixtures before upstream live integration is available.
+
+### Dependency ledger
+
+| Segment | Build may begin when | Live integration may begin when | Release requires |
+|---|---|---|---|
+| S3 Platform | S2A frozen | S1 authentication/database gate accepted | S3 crash, authorization, idempotency, timeout and observability gates |
+| S4A Baseline | S0 begins | Current journeys are observable | Not user-facing; reviewed dataset governance |
+| S4B Harness | S2A plus the measured domain pack | Versioned workflow traces exist | Not user-facing; calibrated graders and reproducible reports |
+| S5 Frontend | Required S2 fixtures frozen | Corresponding S3 command accepted | Journey, accessibility and visual parity plus feature flag/rollback |
+| S6 Ingestion | S2A/S2B fixtures frozen | S3 jobs/model gateway and storage boundary accepted | S4 extraction gates, review routing, idempotency and source accounting |
+| S7 Review/taxonomy | S2B fixtures frozen | S6 draft artifacts accepted | Review audit, normalization evals and downstream invalidation tests |
+| S8 Patterns | S2B/S2D normalized fixtures frozen | S7 canonical records accepted | Golden deterministic fixtures, authorization and snapshot provenance |
+| S9 Learning | S2B/S2C and tutor eval contracts frozen | S3 persistence plus S6/S7 accepted evidence | Tutor/mastery held-out gates, evidence linkage, resume and mobile parity |
+| S10 Exam | S2D and S8 blueprint contract frozen | Accepted S8 snapshot available | Solution/mark-scheme verification, leakage checks and educator evals |
+| S11 Marking/remediation | S2C/S2D schemas frozen | Accepted S10 exam and S9 objective contract available | Marking agreement, abstention, totals and evidence-linked handoff gates |
+| S12 Contribution | S2E contracts and contribution fixtures frozen | S3/S4 runtime plus S6/S7 quality gates and reviewed policy accepted | Consent, privacy, rights, entitlement, takedown and manual-review gates; S8/S9 only for their integrations |
+| S13 Cutover | S2A migration envelope frozen | The individual workflow passes its integration gate | That workflow's held-out/SLO gates, rollback drill, kill switch and approved cohort |
 
 ## 5. Work Segments
 
@@ -170,26 +197,38 @@ Remove immediate hazards and make the current system reproducible before introdu
 
 Security work and schema capture can proceed in parallel if they touch separate migrations/functions. Bug fixes can proceed separately, but all merge only after one integrated current-app smoke run.
 
-## S2 — Domain Model and Versioned Contracts
+## S2 — Incremental Domain Model and Versioned Contract Packs
 
 ### Purpose
 
-Freeze the shared language every later lane will use. This is the main sequential gate.
+Freeze shared language in dependency-sized packs. Contract-first remains the main sequential gate, but unrelated future domains must not become one programme-wide bottleneck.
 
-### Core entities
+### S2A — Common platform contracts
+
+- Authenticated principal, tenant scope, commands, typed errors, idempotency, workflow jobs/steps, model calls, outbox events, and audit events.
+
+### S2B — Resource and evidence contracts
 
 - `resources`, `resource_pages`, `resource_regions`.
 - `resource_scope_snapshots`, `resource_scope_members`.
-- `study_spaces`, `learning_plans`, `learning_objectives`, `conversation_threads`, `conversation_episodes`.
 - `extraction_runs`, `extraction_artifacts`, `extraction_findings`.
 - `questions`, `question_parts`, `question_evidence`.
 - `institutions`, `courses`, `course_offerings`, `concepts`, `concept_aliases`, `question_concepts`.
-- `learner_states`, `learning_objectives`, `learning_sessions`, `tutor_turns`, `attempts`.
+
+### S2C — Learning contracts
+
+- `study_spaces`, `learning_plans`, `learning_objectives`, `conversation_threads`, `conversation_episodes`.
+- `learner_states`, `learning_sessions`, `tutor_turns`, `attempts`.
+
+### S2D — Assessment contracts
+
 - `pattern_snapshots`, `pattern_evidence`.
 - `exam_blueprints`, `exams`, `exam_questions`, `solutions`, `marking_schemes`, `exam_attempts`, `marking_results`.
 - `remediation_assignments`.
+
+### S2E — Contribution and library contracts
+
 - `contribution_submissions`, `contribution_reviews`, `library_resources`, `library_entitlements`, `contributor_rewards`, `takedown_cases`.
-- `workflow_jobs`, `workflow_steps`, `model_calls`, `outbox_events`, `audit_events`.
 
 ### Contract rules
 
@@ -213,14 +252,15 @@ Freeze the shared language every later lane will use. This is the main sequentia
 
 ### Exit gate
 
-- Architecture review approves entity ownership, lifecycle, tenant scope, and deletion behavior.
+- Architecture review approves entity ownership, lifecycle, tenant scope, and deletion behavior for the pack being frozen.
 - JSON Schema contract tests pass in Python and JavaScript.
 - No unresolved question remains about which service is allowed to update each state.
 - Fixtures cover normal, empty, partial, invalid, and legacy records.
+- Every pack declares the earlier packs it imports; circular pack dependencies are rejected.
 
 ### Parallelism
 
-Entity modelling can be divided by domain, but one owner must integrate naming, identifiers, lifecycle, and cross-domain invariants. Consumer implementation must not begin until the first contract version is frozen.
+Entity modelling can be divided by pack, but one contract owner integrates naming, identifiers, lifecycle, and cross-domain invariants. A consumer may begin when all packs it imports are frozen; it does not wait for unrelated later packs. Contract changes are additive and versioned after consumers begin.
 
 ## S3 — Backend Platform and Boring Workflow Runtime
 
@@ -286,13 +326,22 @@ transaction: store result + advance state + enqueue next event
 
 ### Parallelism
 
-API shell, job runner, model gateway, and observability can be owned separately after interfaces freeze. Integrate them through contract tests before feature workflows use them.
+API shell, job runner, model gateway, and observability can be owned separately after S2A freezes. Integrate them through contract tests before feature workflows use them.
 
 ## S4 — Evaluation Harness and Dataset Governance
 
 ### Purpose
 
-Make quality measurable before prompt and model choices harden.
+Make quality measurable before prompt and model choices harden. Dataset governance and baseline capture begin during S0; reusable runner implementation follows the contracts it measures.
+
+### S4A — Baseline and evaluation contract
+
+- Begin during S0 while the current application is still observable.
+- Assign immutable case IDs and record journey, source, consent/license status, redaction, expected behavior, critical-failure labels, and intended split.
+- Freeze grader inputs/outputs with the relevant S2 contract pack.
+- Isolate held-out cases from prompt and model authors from the moment they are designated.
+
+### S4B — Harness and release automation
 
 ### Work
 
@@ -337,7 +386,7 @@ Numeric average thresholds are ratified only after the first human-reviewed base
 
 ### Parallelism
 
-This lane should start immediately after S2 and run continuously. Dataset collection can proceed by workflow in parallel, but held-out examples must be isolated from prompt authors.
+S4A starts during S0 and runs alongside current-system inventory. S4B begins after S2A and then expands as each domain contract pack freezes. Dataset collection can proceed by workflow in parallel, but held-out examples must be isolated from prompt authors.
 
 ## S5 — Frontend Shell and API Boundary
 
@@ -396,7 +445,7 @@ Implement this as a focused component extraction rather than a simulator rewrite
 
 ### Parallelism
 
-Safe after S2. UI extraction, typed client generation, and desktop layout can proceed in parallel by directory ownership. Do not wire live workflow transitions until S3 endpoints are accepted.
+Safe after the relevant S2A/S2B/S2C contracts freeze. UI extraction, typed client generation, and desktop layout can proceed in parallel by directory ownership. Do not wire live workflow transitions until S3 endpoints are accepted.
 
 ## S6 — Ingestion and OCR v2
 
@@ -433,7 +482,7 @@ queued -> validating -> parsing -> rendering -> segmenting
 
 ### Parallelism
 
-Native parsing/rendering, OCR adapters, segmentation, and validators can be developed in parallel against shared fixtures. Final acceptance orchestration is sequential and owned by one workflow.
+Native parsing/rendering, OCR adapters, segmentation, and validators can be developed in parallel against shared S2B fixtures. All are required branches unless a work packet explicitly defines a safe degraded artifact. Final acceptance orchestration is sequential and owned by one workflow.
 
 ## S7 — Review, Metadata and Taxonomy Normalization
 
@@ -459,7 +508,7 @@ Turn probabilistic extraction into a trustworthy resource model and canonical co
 
 ### Parallelism
 
-Review UI and taxonomy services can proceed in parallel after S2. Automated normalization depends on S4 evaluation cases. Patterns may build on frozen normalized fixtures but not production extraction until this gate passes.
+Review UI and taxonomy services can proceed in parallel after S2B. Automated normalization depends on S4 evaluation cases. Patterns may build on frozen normalized fixtures but not production extraction until this gate passes.
 
 ## S8 — Patterns v2
 
@@ -485,7 +534,7 @@ Strengthen the high-ROI deterministic intelligence layer.
 
 ### Parallelism
 
-Algorithms and UI can proceed in parallel against S2 fixtures. Live integration waits for S7. Blueprint contract must freeze before S10 begins integration.
+Algorithms and UI can proceed in parallel against S2B/S2D fixtures. Live integration waits for S7. The S2D blueprint contract must freeze before S10 begins integration.
 
 ## S9 — Progressive Learning and Mastery Engine v2
 
@@ -530,7 +579,7 @@ diagnosing -> teaching -> worked_example -> guided_attempt
 
 ### Parallelism
 
-Learner-state policy, prompt/eval work, tool adapters, and frontend learning components can proceed in parallel after S2/S4 using fixtures. End-to-end persistence waits for S3; source-grounded release waits for S6/S7.
+Learner-state policy, prompt/eval work, tool adapters, and frontend learning components can proceed in parallel after S2B/S2C and the relevant S4 contracts using fixtures. End-to-end persistence waits for S3; source-grounded release waits for S6/S7.
 
 ## S10 — Exam Blueprint, Generation and Verification
 
@@ -595,7 +644,7 @@ The current prototype's `Practice` action inserts a generic session at the `foun
 
 ### Parallelism
 
-Marking evals, remediation schema/UI, and routing code can proceed in parallel after S2. Live marking depends on accepted S10 outputs; Atlas handoff depends on S9 objective contracts.
+Marking evals, remediation schema/UI, and routing code can proceed in parallel after S2C/S2D and the relevant S4 contracts. Live marking depends on accepted S10 outputs; Atlas handoff depends on S9 objective contracts.
 
 ## S12 — Governed Contribution Network
 
@@ -643,13 +692,13 @@ Before implementation reaches publication, obtain reviewed policies for eligible
 
 ### Parallelism
 
-Contribution UX, review console, duplicate tooling, entitlement policy, and reward ledger can proceed in parallel after S2/S3/S4. Publication cannot start before S6/S7 quality gates and the policy gate. Institution Patterns integration depends on S8.
+Contribution UX, review console, duplicate tooling, entitlement policy, and reward ledger can build in parallel after S2E against fixtures. Live integration waits for S3 and the relevant S4 harness. Publication cannot start before S6/S7 quality gates and the policy gate. Institution Patterns integration depends on S8; institution-scoped tutoring depends on S9 scope and entitlement contracts.
 
-## S13 — Migration, Cutover and Production Rollout
+## S13 — Continuous Migration, Cutover and Production Rollout
 
 ### Purpose
 
-Move from prototype paths to the routed workflows without a flag day.
+Move each accepted vertical slice from prototype paths to routed workflows without a flag day. S13 is a cross-cutting lane that begins with Wave A migration fixtures and repeats per workflow; contribution delivery is not a prerequisite for releasing the private learning core.
 
 ### Work
 
@@ -673,6 +722,8 @@ Move from prototype paths to the routed workflows without a flag day.
 7. Contribution pilot at selected institutions.
 8. Remove old Edge Function paths after retention and rollback windows expire.
 
+Each numbered item has its own build, shadow, cohort, release, rollback, and retirement decision. A later item cannot delay an earlier item that independently passes its release gate.
+
 ### Exit gate
 
 - Held-out evaluations and operational SLOs pass for every enabled workflow.
@@ -680,24 +731,28 @@ Move from prototype paths to the routed workflows without a flag day.
 - No production route depends on undocumented legacy schema or browser-held secrets.
 - Incident ownership, alerts, dashboards, runbooks, and kill switches are tested.
 
+### Parallelism
+
+Migration readers, reconciliation, runbooks, dashboards, and load/failure drills may progress beside feature implementation using frozen contracts. Only one owner may authorize a workflow's write cutover. Old-path retirement is sequential and occurs after that workflow's compatibility and rollback window, not after the whole programme completes.
+
 ## 6. Safe Parallel Delivery Waves
 
 ## Wave A — Foundation
 
-Sequential start:
+Baseline evaluation capture begins during S0. The first product slice has this sequential contract spine:
 
 ```text
-S0 -> S1 -> S2 contract freeze
+Pre-S0 -> S0 + S4A -> S1 -> S2A -> S2B + S2C contract freeze
 ```
 
-After S2, run these lanes in parallel:
+S2D and S2E may be designed in parallel when ownership is available, but they do not block the first resource-to-learning slice. After the required packs freeze, run these lanes in parallel:
 
 | Lane | Work | Isolation rule |
 |---|---|---|
 | Platform | S3 API, jobs, model gateway, observability | Own `backend/platform` and infrastructure |
-| Evaluation | S4 datasets, graders, reports | Own `evals/`; prompt authors cannot edit held-out labels |
+| Evaluation | S4B runners, graders, reports and gates | Own `evals/`; prompt authors cannot edit held-out labels |
 | Frontend | S5 feature extraction and mock clients | Own `src/features` and generated client boundaries |
-| Migration | Legacy readers, fixtures, reconciliation | Read-only against production; own migration tooling |
+| Migration/Rollout | Legacy readers, fixtures, reconciliation and S13 controls | Read-only against production until a per-workflow cutover is approved; own migration tooling |
 
 Integration gate: one authenticated command must travel UI -> API -> durable job -> worker -> validated result -> UI using a non-model fixture.
 
@@ -739,6 +794,8 @@ Parallel preparation:
 - Policy and takedown operations.
 - Migration and operational runbooks.
 
+Fixture-backed preparation may begin after S2E freezes; live integration waits for S3 and the relevant S4 harness. It does not block private-resource ingestion, tutoring, Patterns, simulation, remediation, or their per-workflow S13 releases.
+
 Sequential release:
 
 ```text
@@ -753,7 +810,7 @@ policy approval
 
 ## 7. Work That Must Not Be Parallelized Prematurely
 
-- Schema consumers before S2 contract freeze.
+- Schema consumers before every contract pack they import is frozen.
 - Shared-library access before verified authentication, RLS, and entitlement tests.
 - Live Patterns v2 before normalized question/concept records are accepted.
 - Desktop page highlighting before page/region coordinates have an evaluated contract.
@@ -763,6 +820,7 @@ policy approval
 - Contribution publication before consent, eligibility, privacy, review, and takedown controls.
 - Prompt/model optimization before a baseline dataset and cost/quality report exist.
 - Microservice splitting before the modular service shows a measured scaling or isolation problem.
+- Treating contribution delivery as a prerequisite for cutting over an independently accepted private-learning workflow.
 
 ## 8. Parallel Engineering Rules
 
@@ -779,7 +837,53 @@ To make parallel work safe and boring:
 9. Database migrations are additive first; destructive cleanup is a later, separately approved release.
 10. One owner coordinates state-machine changes because transition names and invariants are shared contracts.
 
-## 9. Orchestration Invariants
+## 9. Python-Agents Reference Standard
+
+`C:\Users\Lusa\python-agents` is a read-only teaching and implementation reference. Atlas must not import it, modify it, or couple production behavior to it. Atlas implementations reproduce only the reviewed principles needed inside the Atlas codebase:
+
+- Keep workflow orchestration provider-independent and place Claude/provider syntax in thin adapters.
+- Use a chain for known sequential transformations; give every step a unique stable name and validate its output before the next step.
+- Run branches concurrently only when they are independent. Cap concurrency, preserve declared branch identity and aggregation order, and fail closed unless partial output is explicitly safe.
+- Route over a closed application-owned label set, validate confidence locally, execute exactly one route, and define clarification or an allowlisted fallback for low confidence.
+- Bound evaluator/repair loops by iterations, time, tokens, and cost. Preserve candidates and evaluations and return an explicit unaccepted outcome at the limit.
+- Preserve complete structured model blocks and matched tool request/result IDs privately; render only controlled progress labels to students.
+- Test orchestration with plain functions and fake adapters before using live model calls.
+- Add comments or docstrings for intent, invariants, failure policy, and non-obvious constraints; do not comment code merely to restate it.
+
+### Required implementation work packet
+
+Every task entering implementation must state:
+
+| Field | Required content |
+|---|---|
+| Objective | One bounded user or system outcome |
+| Contract packs | Frozen schemas and versions consumed or produced |
+| Dependency class | Build, live integration, and release prerequisites separately |
+| Pattern | Deterministic function, one model call, chain, parallel aggregation, route, bounded evaluator/repair, or bounded tool loop |
+| Steps/branches | Stable names, inputs, outputs, validators, and aggregation order |
+| Authority | Initiator, authenticated principal, reads, writes, tenant scope, and approval rule |
+| Failure policy | Fail-closed/partial rule, retry classes, cancellation, degraded mode, and explicit unaccepted result |
+| Budget | Calls, tool rounds, wall time, tokens, cost, concurrency, payload, and retry/repair limit |
+| Verification | Unit, contract, integration, authorization, idempotency, postcondition, and eval cases |
+| Ownership | Directory owner, integration owner, rollout owner, feature flag, and kill switch |
+
+### Default workflow budgets and failure semantics
+
+These are design ceilings, not spending targets. S0 may lower them after document-size and latency baselines; raising them requires a versioned design and evaluation change.
+
+| Workflow | Model-call ceiling | Tool/repair ceiling | Parallel/partial policy |
+|---|---:|---:|---|
+| Explicit command or mention resolution | 0 | 0 | Exactly one deterministic route; unknown input fails closed |
+| Tutor turn | 3 total | 2 tool rounds or 1 repair within the same total | Required evidence/tool failures abstain; optional visualization may degrade explicitly |
+| One extraction run | 3 total | 1 invalid-output repair within the same total | Required page accounting, segmentation, and validation fail closed; uncertain fields route to review |
+| Pattern snapshot | 0 normally | 0 | Required inputs fail closed; unavailable optional metrics are labelled and excluded |
+| Exam generation | 4 total | 1 repair per rejected bounded batch within the same total | All blueprint slots, solutions, and marking schemes are required for publication |
+| Marking | 2 total | 1 repair within the same total | Unmarkable answers abstain explicitly; totals publish only after all required items resolve |
+| Contribution screening | 2 total | 1 repair within the same total | Privacy, eligibility, authorization, and duplicate gates fail closed; no reward or publication on partial results |
+
+Parallel branches use bounded configuration rather than an unbounded task fan-out. The initial process-local ceiling is four branches and each route may set a lower value. Outputs are aggregated in declared stable order even when execution completes out of order. A work packet must override the default explicitly when a safe partial result is intended.
+
+## 10. Orchestration Invariants
 
 Every workflow must satisfy:
 
@@ -797,7 +901,7 @@ Every workflow must satisfy:
 - A retry can repeat execution but cannot repeat the logical effect.
 - A kill switch can stop new work without corrupting work already committed.
 
-## 10. Definition of Done for Every Segment
+## 11. Definition of Done for Every Segment
 
 A segment is not done when code exists. It is done when:
 
@@ -811,13 +915,13 @@ A segment is not done when code exists. It is done when:
 - the feature is demonstrated through a production-like environment;
 - residual risks and intentionally unsupported cases are recorded.
 
-## 11. Recommended First Three Delivery Milestones
+## 12. Recommended First Three Delivery Milestones
 
 ### Milestone 1 — Safe, Reproducible Prototype
 
-Includes S0, S1, and S2.
+Includes Pre-S0, S0, S1, and frozen S2A/S2B/S2C packs. Later S2D/S2E packs proceed when their consumers approach implementation and do not block this milestone.
 
-Outcome: the existing product still works, but schema/security/session defects are controlled and the replacement contracts are frozen.
+Outcome: the existing product still works, schema/security/session defects are controlled, and the replacement contracts required by the first vertical slice are frozen.
 
 ### Milestone 2 — Resource-to-Learning Vertical Slice
 
@@ -849,7 +953,7 @@ accepted resources -> explainable pattern snapshot
 
 Only after these slices are stable should S12 turn resource quality into the institution-specific network effect.
 
-## 12. Explicitly Deferred Decisions
+## 13. Explicitly Deferred Decisions
 
 - Separate microservices: defer until measured scale, team ownership, or permission isolation requires them.
 - Redis/Celery/Kafka: defer until Postgres job/outbox throughput is insufficient.

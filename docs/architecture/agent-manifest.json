@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "agent_id": "atlas-learning-system",
-  "version": "0.3.0-design",
+  "version": "0.4.0-design",
   "objective": "Turn private and explicitly contributed mathematics resources into reliable progressive teaching, assessment, simulation, remediation, and institution-specific learning intelligence.",
   "risk_level": "high",
   "architecture": {
@@ -44,7 +44,7 @@
   "budgets": {"max_model_calls":4,"max_tool_rounds":2,"timeout_seconds":300,"max_input_tokens":100000,"max_output_tokens":12000,"cost_limit_usd":1.0},
   "policies": {
     "clarification": "Clarify or review ambiguous regions, transcriptions, institution/course metadata, rights status, concept matches, or student answers.",
-    "abstention": "Do not publish extraction or contributions, grant rewards, promote mastery, publish an exam, or assign marks below the route's evidence and authorization threshold.",
+    "abstention": "Do not publish extraction or contributions, grant rewards, promote mastery, publish an exam, assign marks below the route's evidence and authorization threshold, or accept an aggregate after any required parallel branch fails.",
     "approval": "Private upload is not contribution consent; contribution requires explicit versioned user approval, shared publication requires an accepted review, and destructive deletion requires explicit confirmation.",
     "environment_inspection": "Derive identity from the token and inspect ownership, consent, contribution eligibility, library entitlement, takedown status, state, quota, and version before every read or write.",
     "postcondition_verification": "Read back and validate identifiers, status, counts, publication visibility, entitlements, links, and transitions after mutations."
@@ -53,7 +53,7 @@
     "development_dataset":"evals/datasets/development/",
     "held_out_dataset":"evals/datasets/held-out/",
     "metrics":["command parse and route accuracy","mention resolution and rename stability","scope-freezing and study-space resume accuracy","cross-scope contamination rate","extraction accuracy","segmentation accuracy","contribution eligibility and metadata accuracy","personal-data detection recall","duplicate detection precision and recall","institution library authorization accuracy","taxonomy and remediation routing accuracy","mathematical correctness","answer-grading agreement","mastery progression precision","exam validity and marking agreement","latency, calls, tokens, cost, retries, and abstentions"],
-    "critical_failures":["cross-tenant or library access","cross-scope evidence contamination","model-authorized explicit command","duplicate active study plan from a retried resume","publication without explicit consent","publication of leaked, personally identifying, or ineligible content","reward before contribution acceptance","unauthorized write","silent source corruption","false mathematics accepted as correct","unsupported mastery promotion","invalid published exam","unbounded execution"],
+    "critical_failures":["cross-tenant or library access","cross-scope evidence contamination","model-authorized explicit command","duplicate active study plan from a retried resume","publication without explicit consent","publication of leaked, personally identifying, or ineligible content","reward before contribution acceptance","unauthorized write","silent source corruption","false mathematics accepted as correct","unsupported mastery promotion","invalid published exam","accepted aggregate after required parallel-branch failure","model-call budget reset across stage, branch, batch, or page boundaries","unbounded execution"],
     "held_out_required":true,
     "html_report":true
   },
