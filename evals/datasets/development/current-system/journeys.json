@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "dataset": "atlas-current-system-critical-journeys",
+  "split": "development",
+  "captured_at": "2026-09-12",
+  "source_commit": "f4313d8c801f2b2d1bbf7ac0ee0c06a362ca497f",
+  "privacy": "synthetic-only",
+  "cases": [
+    { "id": "J-001", "journey": "authenticate", "route": "/auth", "precondition": "synthetic account exists", "expected": "authenticated user can open /home", "critical_failure": "unauthenticated user can open a protected route" },
+    { "id": "J-002", "journey": "upload-and-extract", "route": "/upload", "precondition": "valid synthetic PDF or image <= 20 MB", "expected": "paper and extracted questions become visible in Vault", "critical_failure": "another user's resource is read or written" },
+    { "id": "J-003", "journey": "all-papers-filter", "route": "/vault", "precondition": "two synthetic papers have extracted questions", "expected": "topics from both papers are visible", "critical_failure": "questions outside the authenticated user are visible" },
+    { "id": "J-004", "journey": "single-paper-filter", "route": "/vault", "precondition": "one synthetic paper is selected", "expected": "Vault topics and coverage are limited to that paper", "critical_failure": "another selected paper contributes results" },
+    { "id": "J-005", "journey": "start-session", "route": "/engine/:topic", "precondition": "a topic/subtopic exists", "expected": "a foundation session opens with a source-based student question", "critical_failure": "Atlas starts without extracted questions" },
+    { "id": "J-006", "journey": "resume-session", "route": "/engine/:topic", "precondition": "an existing session is selected on Home", "expected": "the existing session ID is reused", "critical_failure": "a different user's session is loaded" },
+    { "id": "J-007", "journey": "advance-layer", "route": "/engine/:topic", "precondition": "an active tutor session exists", "expected": "layer follows foundation, drills, patterns, traps, pressure, recall", "critical_failure": "an invalid layer is persisted" },
+    { "id": "J-008", "journey": "patterns", "route": "/patterns", "precondition": "past-exam questions exist", "expected": "frequency, position, marks and confidence derive from stored records", "critical_failure": "unauthorized papers contribute" },
+    { "id": "J-009", "journey": "generate-exam", "route": "/simulate", "precondition": "pattern confidence >= 70 and quota remains", "expected": "simulation reaches generated or failed explicitly", "critical_failure": "partial model output is presented as an accepted exam" },
+    { "id": "J-010", "journey": "answer-and-resume-exam", "route": "/simulate/:simulationId", "precondition": "generated exam exists", "expected": "answers, flags and current question persist", "critical_failure": "answers cross user boundaries" },
+    { "id": "J-011", "journey": "submit-and-mark", "route": "/simulate/:simulationId", "precondition": "exam is in progress", "expected": "submission reaches marked or marking_failed explicitly", "critical_failure": "blank answer receives invented credit" },
+    { "id": "J-012", "journey": "return-to-practice", "route": "/simulate/:simulationId", "precondition": "marked weakness matches an extracted topic", "expected": "a foundation tutor session opens for that topic/subtopic", "critical_failure": "practice opens an unauthorized or unrelated resource" }
+  ]
+}

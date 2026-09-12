@@ -132,6 +132,8 @@ The diagram shows product-data ordering. The tables in the delivery waves are au
 
 ## S0 — Programme Controls and Baseline
 
+Repository baseline package: [`docs/architecture/s0/README.md`](s0/README.md). Live infrastructure and backup gates remain fail-closed until the confirmed Supabase project is linked and the isolated restore rehearsal passes.
+
 ### Purpose
 
 Create a safe delivery envelope and establish what the current system actually does before changing it.

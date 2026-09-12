@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:s0": "node --test tests/s0-controls.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
