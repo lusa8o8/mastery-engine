@@ -50,6 +50,8 @@ test('browser has no Anthropic key path and tutor resume loads durable state', a
   assert.doesNotMatch(engine, /content:\s*input\.trim\(\)/)
   assert.match(engine, /\.select\('current_layer, current_question_id'\)/)
   assert.match(engine, /\.from\('messages'\)[\s\S]+\.order\('created_at', \{ ascending: true \}\)/)
+  assert.match(engine, /\.select\('id', \{ count: 'exact', head: true \}\)/)
+  assert.doesNotMatch(engine, /window\.history\.state\?\.resume/)
 })
 
 test('simulator quota claims are transactional and model calls consume a claim once', async () => {

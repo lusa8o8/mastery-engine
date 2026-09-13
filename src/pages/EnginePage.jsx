@@ -320,13 +320,26 @@ export default function EnginePage() {
   useEffect(function () {
     if (!user || initialized) return
     setInitialized(true)
-    const isResume = sessionId && window.history.state?.resume
-    if (isResume) {
-      loadQuestionsOnly()
-    } else {
-      loadAndStart()
-    }
+    initializeSession()
   }, [user])
+
+  async function initializeSession() {
+    try {
+      // Browser history state disappears on reload and direct links. Persisted
+      // messages are the durable authority for whether this session has begun.
+      const { count, error: countError } = await supabase
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', sessionId)
+      if (countError) throw countError
+
+      if ((count || 0) > 0) await loadQuestionsOnly()
+      else await loadAndStart()
+    } catch (e) {
+      setError(e.message)
+      setLoading(false)
+    }
+  }
 
   async function loadQuestionsOnly() {
     setLoading(true)
