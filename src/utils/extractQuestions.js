@@ -13,17 +13,13 @@ export async function extractAndSave(paper) {
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       },
       body: JSON.stringify({
-        paperId: paper.id,
-        fileUrl: paper.file_url,
-        fileType: paper.file_type,
-        userId: paper.user_id
+        paperId: paper.id
       })
     }
   )
 
   const data = await response.json()
-  if (!response.ok) throw new Error(data.error || 'atlas-extract error')
-  if (data.error) throw new Error(data.error)
+  if (!response.ok) throw new Error(data.error?.message || 'atlas-extract error')
 
   return data.count
 }

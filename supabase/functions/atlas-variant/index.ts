@@ -1,4 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import {
+  createAdminClient,
+  errorResponse,
+  HttpError,
+  requireUser
+} from '../_shared/http.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,16 +17,18 @@ serve(async (req) => {
   }
 
   try {
+    const admin = createAdminClient()
+    const user = await requireUser(req, admin)
     const { topic, subType, layer, questions } = await req.json()
 
-    if (!topic || !subType || !layer || !questions) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+    if (!topic || !subType || !layer || !Array.isArray(questions) || questions.length === 0) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'topic, subType, layer and questions are required.')
     }
 
-    const questionList = questions.map((q: any) => q.raw_text).join('\n')
+    const questionList = questions
+      .slice(0, 50)
+      .map((q: any) => String(q.raw_text ?? '').slice(0, 4000))
+      .join('\n')
     const variantPrompt = `You are a math exam question generator for "${subType}" in "${topic}".
 Study these real exam questions carefully:
 ${questionList}
@@ -61,14 +69,30 @@ Return ONLY the question text. No explanation. No preamble.`
 
     const text = anthropicData.content[0].text
 
-    return new Response(JSON.stringify({ text }), {
+    const usage = anthropicData.usage
+    if (usage) {
+      const inputTokens = Number(usage.input_tokens || 0)
+      const outputTokens = Number(usage.output_tokens || 0)
+      const { error: logError } = await admin.from('token_logs').insert({
+        user_id: user.id,
+        session_id: null,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        model: 'claude-haiku-4-5-20251001',
+        context: 'question_variant',
+        estimated_cost_usd: Number((inputTokens / 1_000_000 * 0.80 + outputTokens / 1_000_000 * 4.00).toFixed(8)),
+        input_cost_per_m: 0.80,
+        output_cost_per_m: 4.00,
+        cost_currency: 'USD'
+      })
+      if (logError) console.error('Token log failed', logError)
+    }
+
+    return new Response(JSON.stringify({ text, usage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
 
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return errorResponse(e, corsHeaders)
   }
 })

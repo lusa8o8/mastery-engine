@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { getPatterns } from '../utils/getPatterns'
-import { getQuotaWindowStartIso, getUserSimulatorQuota } from '../utils/simulatorQuotas'
+import { getUserSimulatorQuota } from '../utils/simulatorQuotas'
 import { supabase } from '../api/supabase'
 
 const EXAM_MODEL = 'claude-sonnet-4-6'
@@ -443,22 +443,16 @@ export default function SimulatePage() {
     let simulationRecord = null
 
     try {
-      await assertGenerationQuota()
-      const { data: created, error: createError } = await supabase
-        .from('exam_simulations')
-        .insert({
-          user_id: user.id,
-          status: 'generating',
-          source: 'pattern_generated',
-          confidence_at_creation: patterns.confidence,
-          patterns_snapshot: patterns,
-          model: EXAM_MODEL,
-          prompt_version: EXAM_PROMPT_VERSION
-        })
-        .select()
-        .single()
+      const { data: claim, error: createError } = await supabase.rpc('claim_exam_generation', {
+        p_confidence_at_creation: patterns.confidence,
+        p_patterns_snapshot: patterns,
+        p_model: EXAM_MODEL,
+        p_prompt_version: EXAM_PROMPT_VERSION
+      })
 
       if (createError) throw createError
+      if (!claim?.ok) throw new Error(getGenerationClaimError(claim))
+      const created = claim.simulation
       simulationRecord = created
       setSimulation(created)
 
@@ -478,13 +472,14 @@ export default function SimulatePage() {
             systemPrompt: 'You are Atlas, an expert math exam generator. You generate realistic exam papers in valid JSON format only. Never include text outside the JSON object.',
             messages: [{ role: 'user', content: prompt }],
             context: 'exam_simulation',
+            simulationId: created.id,
             maxTokens: 8192
           })
         }
       )
 
       const result = await response.json()
-      if (result.error) throw new Error(result.error)
+      if (!response.ok) throw new Error(result.error?.message || 'Simulation generation failed')
 
       const raw = result.text.replace(/```json|```/g, '').trim()
       const examData = JSON.parse(raw)
@@ -522,47 +517,25 @@ export default function SimulatePage() {
     }
   }
 
-  async function assertGenerationQuota() {
-    const activeQuota = quota || await getUserSimulatorQuota(user.id)
-    const windowStart = getQuotaWindowStartIso()
-    const activeStatuses = ['generated', 'in_progress', 'submitted', 'marking', 'marked', 'marking_failed']
-
-    const { count: storedCount, error: storedError } = await supabase
-      .from('exam_simulations')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .in('status', activeStatuses)
-
-    if (storedError) throw storedError
-    if ((storedCount || 0) >= activeQuota.storedPapers) {
-      throw new Error(`${activeQuota.label} includes ${activeQuota.storedPapers} saved simulator paper${activeQuota.storedPapers === 1 ? '' : 's'}. Review an existing paper before generating another.`)
+  function getGenerationClaimError(claim) {
+    if (claim?.error_code === 'SIMULATOR_STORED_LIMIT') {
+      return `Your plan includes ${claim.limit} saved simulator paper${claim.limit === 1 ? '' : 's'}. Review an existing paper before generating another.`
     }
-
-    const { count: generationCount, error: generationError } = await supabase
-      .from('exam_simulations')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('created_at', windowStart)
-      .neq('status', 'failed')
-
-    if (generationError) throw generationError
-    if ((generationCount || 0) >= activeQuota.generatedPapersPerMonth) {
-      throw new Error(`Current plan includes ${activeQuota.generatedPapersPerMonth} Exam Simulation${activeQuota.generatedPapersPerMonth === 1 ? '' : 's'} every 30 days.`)
+    if (claim?.error_code === 'SIMULATOR_GENERATION_LIMIT') {
+      return `Your plan includes ${claim.limit} Exam Simulation${claim.limit === 1 ? '' : 's'} every 30 days.`
     }
+    return 'Atlas could not reserve an exam simulation.'
   }
 
-  async function hasMarkingQuota() {
-    const activeQuota = quota || await getUserSimulatorQuota(user.id)
-    const windowStart = getQuotaWindowStartIso()
-    const { count, error } = await supabase
-      .from('exam_simulations')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('submitted_at', windowStart)
-      .in('status', ['marking', 'marked', 'marking_failed'])
-
+  async function claimMarking() {
+    const { data: claim, error } = await supabase.rpc('claim_exam_marking', {
+      p_simulation_id: simulation.id,
+      p_model: EXAM_MARKING_MODEL,
+      p_prompt_version: EXAM_MARKING_PROMPT_VERSION
+    })
     if (error) throw error
-    return (count || 0) < activeQuota.markedAttemptsPerMonth
+    if (claim?.simulation) setSimulation(claim.simulation)
+    return claim
   }
 
   async function startExam() {
@@ -681,25 +654,9 @@ export default function SimulatePage() {
     try {
       setSubmitDialogOpen(false)
       await flushAnswer(currentQuestionIndex)
-      const canMark = await hasMarkingQuota()
-      const { data, error } = await supabase
-        .from('exam_simulations')
-        .update({
-          status: canMark ? 'marking' : 'marking_failed',
-          submitted_at: simulation.submitted_at || new Date().toISOString(),
-          marking_model: EXAM_MARKING_MODEL,
-          marking_prompt_version: EXAM_MARKING_PROMPT_VERSION,
-          marking_error: canMark ? null : `Your plan's 30-day marking limit has been reached. This attempt is saved, but Atlas will not mark it yet.`
-        })
-        .eq('id', simulation.id)
-        .eq('user_id', user.id)
-        .select()
-        .single()
-
-      if (error) throw error
-      setSimulation(data)
-      if (canMark) {
-        await markSubmittedExam(data)
+      const claim = await claimMarking()
+      if (claim?.ok) {
+        await markSubmittedExam(claim.simulation)
       }
     } catch (e) {
       setError(e.message)
@@ -713,26 +670,11 @@ export default function SimulatePage() {
     setSubmitting(true)
     setError('')
     try {
-      const canMark = await hasMarkingQuota()
-      if (!canMark) {
+      const claim = await claimMarking()
+      if (!claim?.ok) {
         throw new Error(`Your plan's 30-day marking limit has been reached. You can review this attempt, but Atlas cannot mark more papers yet.`)
       }
-      const { data, error } = await supabase
-        .from('exam_simulations')
-        .update({
-          status: 'marking',
-          marking_model: EXAM_MARKING_MODEL,
-          marking_prompt_version: EXAM_MARKING_PROMPT_VERSION,
-          marking_error: null
-        })
-        .eq('id', simulation.id)
-        .eq('user_id', user.id)
-        .select()
-        .single()
-
-      if (error) throw error
-      setSimulation(data)
-      await markSubmittedExam(data)
+      await markSubmittedExam(claim.simulation)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -817,15 +759,14 @@ export default function SimulatePage() {
             systemPrompt: 'You are Atlas, an expert math examiner. Mark submitted answer-only exam attempts conservatively and return valid JSON only.',
             messages: [{ role: 'user', content: prompt }],
             context: 'exam_marking',
-            sessionId: markingSimulation.id,
-            userId: user.id,
+            simulationId: markingSimulation.id,
             maxTokens: 8192
           })
         }
       )
 
       const result = await response.json()
-      if (!response.ok || result.error) throw new Error(result.error || 'Marking request failed')
+      if (!response.ok) throw new Error(result.error?.message || 'Marking request failed')
 
       const raw = result.text.replace(/```json|```/g, '').trim()
       const marking = JSON.parse(raw)

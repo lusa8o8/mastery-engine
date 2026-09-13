@@ -1,5 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  createAdminClient,
+  errorResponse,
+  HttpError,
+  requireUser
+} from '../_shared/http.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -82,26 +87,65 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  try {
-    const { paperId, fileUrl, fileType, userId } = await req.json()
+  let admin: ReturnType<typeof createAdminClient> | null = null
+  let claimedPaperId: string | null = null
 
-    if (!paperId || !fileUrl || !fileType || !userId) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
+  try {
+    admin = createAdminClient()
+    const user = await requireUser(req, admin)
+    const { paperId } = await req.json()
+
+    if (!paperId) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'paperId is required.')
+    }
+
+    // Resolve the resource through the verified principal. Never accept a
+    // caller-supplied file URL, media type or user ID for service-role writes.
+    const { data: paper, error: paperError } = await admin
+      .from('papers')
+      .select('id, user_id, file_url, file_type, extraction_status')
+      .eq('id', paperId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (paperError) throw paperError
+    if (!paper) {
+      throw new HttpError(404, 'PAPER_NOT_FOUND', 'The paper was not found for this student.')
+    }
+
+    if (paper.extraction_status === 'completed') {
+      const { count, error: countError } = await admin
+        .from('questions')
+        .select('id', { count: 'exact', head: true })
+        .eq('paper_id', paper.id)
+        .eq('user_id', user.id)
+      if (countError) throw countError
+      return new Response(JSON.stringify({ count: count || 0, metadata: null, reused: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
+
+    const { data: claimStatus, error: claimError } = await admin.rpc('claim_paper_extraction', {
+      p_paper_id: paper.id,
+      p_user_id: user.id
+    })
+    if (claimError) throw claimError
+    if (claimStatus !== 'claimed') {
+      throw new HttpError(409, 'EXTRACTION_IN_PROGRESS', 'Extraction is already running for this paper.')
+    }
+    claimedPaperId = paper.id
+
+    const fileUrl = paper.file_url
+    const fileType = paper.file_type
 
     // If fileUrl is a storage path generate a signed URL
     let fetchUrl = fileUrl
     if (!fileUrl.startsWith('http')) {
       const bucket = 'papers'
       const path = fileUrl.replace('papers/', '')
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      )
-      const { data: signed, error: signError } = await supabaseAdmin.storage
+      if (path.split('/')[0] !== user.id) {
+        throw new HttpError(403, 'PAPER_PATH_FORBIDDEN', 'The paper file is outside the student storage folder.')
+      }
+      const { data: signed, error: signError } = await admin.storage
         .from(bucket)
         .createSignedUrl(path, 3600)
       if (signError) throw new Error('Failed to generate signed URL: ' + signError.message)
@@ -181,48 +225,65 @@ serve(async (req) => {
       ? parseMetadata(metadataData.content?.[0]?.text || '')
       : null
 
-    // Save to DB using service role key
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
     // Save questions
     const rows = questions.map((q: any) => ({
-      paper_id: paperId,
-      user_id: userId,
       raw_text: q.raw_text || q.question || q.text || q.content || '',
       topic: q.topic,
       sub_type: q.sub_type,
-      source: 'extracted',
       difficulty_hint: q.difficulty_hint || null,
       section: q.section || null,
       question_number: q.question_number || null,
       marks: typeof q.marks === 'number' ? q.marks : null
     }))
 
-    const { error: dbError } = await supabaseClient.from('questions').insert(rows)
-    if (dbError) throw dbError
+    const normalizedMetadata = metadata ? {
+      instructions: Array.isArray(metadata.instructions) ? metadata.instructions : [],
+      time_minutes: metadata.timeMinutes ?? null,
+      total_questions: metadata.totalQuestions ?? null,
+      attempt_questions: metadata.attemptQuestions ?? null,
+      calculators_allowed: metadata.calculatorsAllowed ?? null
+    } : null
 
-    // Save metadata to papers table if extracted
-    if (metadata) {
-      await supabaseClient.from('papers').update({
-        instructions: metadata.instructions || null,
-        time_minutes: metadata.timeMinutes || null,
-        total_questions: metadata.totalQuestions || null,
-        attempt_questions: metadata.attemptQuestions || null,
-        calculators_allowed: metadata.calculatorsAllowed ?? null
-      }).eq('id', paperId)
+    const { data: savedCount, error: dbError } = await admin.rpc('complete_paper_extraction', {
+      p_paper_id: paper.id,
+      p_user_id: user.id,
+      p_questions: rows,
+      p_metadata: normalizedMetadata
+    })
+    if (dbError) throw dbError
+    claimedPaperId = null
+
+    const inputTokens = Number(questionsData.usage?.input_tokens || 0) + Number(metadataData.usage?.input_tokens || 0)
+    const outputTokens = Number(questionsData.usage?.output_tokens || 0) + Number(metadataData.usage?.output_tokens || 0)
+    if (inputTokens + outputTokens > 0) {
+      const { error: logError } = await admin.from('token_logs').insert({
+        user_id: user.id,
+        session_id: null,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        model: 'claude-haiku-4-5-20251001',
+        context: 'paper_extraction',
+        estimated_cost_usd: Number((inputTokens / 1_000_000 * 0.80 + outputTokens / 1_000_000 * 4.00).toFixed(8)),
+        input_cost_per_m: 0.80,
+        output_cost_per_m: 4.00,
+        cost_currency: 'USD'
+      })
+      if (logError) console.error('Token log failed', logError)
     }
 
-    return new Response(JSON.stringify({ count: questions.length, metadata: metadata || null }), {
+    return new Response(JSON.stringify({ count: savedCount, metadata: metadata || null }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
 
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    if (admin && claimedPaperId) {
+      const message = e instanceof Error ? e.message.slice(0, 1000) : 'Unknown extraction error'
+      const { error: failureError } = await admin
+        .from('papers')
+        .update({ extraction_status: 'failed', extraction_error: message })
+        .eq('id', claimedPaperId)
+      if (failureError) console.error('Failed to record extraction failure', failureError)
+    }
+    return errorResponse(e, corsHeaders)
   }
 })

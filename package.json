@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test:s0": "node --test tests/s0-controls.test.mjs",
+    "test:s1": "node --test tests/s1-security-controls.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

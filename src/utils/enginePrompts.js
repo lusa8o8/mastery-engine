@@ -1,8 +1,13 @@
-export function getSystemPrompt(topic, subType, layer, vaultQuestions) {
+export function getSystemPrompt(topic, subType, layer, vaultQuestions, activeQuestion = null) {
   const safeQuestions = Array.isArray(vaultQuestions) ? vaultQuestions : []
-  const questionList = safeQuestions
+  let questionList = safeQuestions
     .map(function (q, i) { return (i + 1) + '. ' + q.raw_text })
     .join('\n')
+  if (activeQuestion) {
+    questionList += '\n\nCURRENT STUDENT QUESTION (database ID ' + activeQuestion.id + '):\n' +
+      activeQuestion.raw_text +
+      '\n\nWhen you assign a question under "YOUR TURN", use this exact question. Do not silently replace it with another vault question. Do not reveal its solution before the student attempts it.'
+  }
 
   const layerInstructions = {
     foundation: 'You are in the FOUNDATION layer. Your job:\n1. Give a clear intro and background on "' + subType + '" within "' + topic + '". Explain what it is and why it matters in exams.\n2. List the key rules, definitions, and formulas as a clean checklist.\n3. Show ONE worked example from the vault questions below. Keep it concise  maximum 4 steps. Explain WHY each step is taken but do not over-explain.\n4. MANDATORY: After the worked example you MUST present a DIFFERENT question from the vault for the student to attempt. Never end without a student question.\n5. MANDATORY: End your response with the student question clearly under the heading "YOUR TURN:" followed by the question text, then the line: "Attempt the question above and paste your working when ready."\n\nCRITICAL RULE: Your response is incomplete unless it ends with YOUR TURN: and a vault question. The worked example is not the end  it is the setup for the student question.',

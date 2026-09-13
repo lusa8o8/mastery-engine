@@ -206,7 +206,7 @@ Be direct, specific, and actionable. Write for a student preparing for this exac
         }
       )
       const result = await response.json()
-      if (result.error) throw new Error(result.error)
+      if (!response.ok) throw new Error(result.error?.message || 'Pattern analysis failed')
       setNarrative(result.text)
     } catch (e) {
       setNarrative('Could not generate analysis. Try again.')

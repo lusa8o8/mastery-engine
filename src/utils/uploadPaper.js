@@ -3,7 +3,7 @@ import { supabase } from '../api/supabase'
 export async function uploadPaper(file, userId, name, assessmentType) {
   const ext = file.name.split('.').pop().toLowerCase()
   const fileType = ext === 'pdf' ? 'pdf' : 'image'
-  const fileName = `${userId}/${Date.now()}.${ext}`
+  const fileName = `${userId}/${crypto.randomUUID()}.${ext}`
 
   const { error: storageError } = await supabase.storage
     .from('papers')
@@ -21,12 +21,12 @@ export async function uploadPaper(file, userId, name, assessmentType) {
     })
     .select()
     .single()
-  if (dbError) throw dbError
+  if (dbError) {
+    // Avoid an orphaned private object when its metadata row cannot be created.
+    const { error: cleanupError } = await supabase.storage.from('papers').remove([fileName])
+    if (cleanupError) console.error('Failed to clean up uploaded paper:', cleanupError)
+    throw dbError
+  }
 
-  const { data: signedData, error: signedError } = await supabase.storage
-    .from('papers')
-    .createSignedUrl(fileName, 3600)
-  if (signedError) throw signedError
-
-  return { ...data, file_url: signedData.signedUrl }
+  return data
 }

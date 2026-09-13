@@ -5,7 +5,7 @@ import { getQuestionsForSubType } from '../utils/getQuestions'
 import { getSystemPrompt, getUserMessage } from '../utils/enginePrompts'
 import { LAYERS, getNextLayer } from '../utils/constants'
 import { supabase } from '../api/supabase'
-import { logTokens, estimateCost } from '../utils/logTokens'
+import { estimateCost } from '../utils/logTokens'
 import MathViz from '../components/MathViz'
 import { parseMessageSegments } from '../utils/parseMessageSegments'
 import { renderMath } from '../utils/renderMath'
@@ -199,7 +199,7 @@ function renderMarkdown(text) {
   return out
 }
 
-async function askClaude(systemPrompt, messages, userId, sessionId, context) {
+async function askClaude(systemPrompt, messages, sessionId, context) {
   const { data: { session } } = await supabase.auth.getSession()
 
   const response = await fetch(
@@ -211,13 +211,12 @@ async function askClaude(systemPrompt, messages, userId, sessionId, context) {
         'Authorization': `Bearer ${session?.access_token}`,
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
       },
-      body: JSON.stringify({ systemPrompt, messages, sessionId, context, userId })
+      body: JSON.stringify({ systemPrompt, messages, sessionId, context })
     }
   )
 
   const data = await response.json()
-  if (!response.ok) throw new Error(data.error || 'atlas-chat error')
-  if (data.error) throw new Error(data.error)
+  if (!response.ok) throw new Error(data.error?.message || 'atlas-chat error')
   return { text: data.text, viz: data.viz || null, usage: data.usage }
 }
 
@@ -238,8 +237,7 @@ async function generateVariant(topic, subType, layer, previousQuestions) {
   )
 
   const data = await response.json()
-  if (!response.ok) throw new Error(data.error || 'atlas-variant error')
-  if (data.error) throw new Error(data.error)
+  if (!response.ok) throw new Error(data.error?.message || 'atlas-variant error')
   return data.text
 }
 
@@ -271,6 +269,36 @@ export default function EnginePage() {
 
   const currentLayerLabel = LAYERS.find(function (l) { return l.id === currentLayer })?.label || currentLayer
   const nextLayer = getNextLayer(currentLayer)
+
+  async function persistMessages(rows) {
+    if (!sessionId || rows.length === 0) return
+    const { error: messageError } = await supabase.from('messages').insert(
+      rows.map(function (row) {
+        return {
+          session_id: sessionId,
+          role: row.role,
+          content: row.content,
+          viz: row.viz || null
+        }
+      })
+    )
+    if (messageError) throw messageError
+
+    const { error: sessionError } = await supabase.from('sessions').update({
+      last_active_at: new Date().toISOString()
+    }).eq('id', sessionId)
+    if (sessionError) throw sessionError
+  }
+
+  async function persistCurrentQuestion(question) {
+    setCurrentQuestion(question || null)
+    if (!sessionId) return
+    const { error: questionError } = await supabase
+      .from('sessions')
+      .update({ current_question_id: question?.id || null })
+      .eq('id', sessionId)
+    if (questionError) throw questionError
+  }
 
   useEffect(function () {
     // Only scroll when loading transitions from true → false (response just landed)
@@ -304,12 +332,43 @@ export default function EnginePage() {
     setLoading(true)
     setError('')
     try {
-      const qs = await getQuestionsForSubType(user.id, topic, subType)
+      const [qs, sessionResult, messageResult] = await Promise.all([
+        getQuestionsForSubType(user.id, topic, subType),
+        supabase
+          .from('sessions')
+          .select('current_layer, current_question_id')
+          .eq('id', sessionId)
+          .eq('user_id', user.id)
+          .single(),
+        supabase
+          .from('messages')
+          .select('role, content, viz, created_at')
+          .eq('session_id', sessionId)
+          .order('created_at', { ascending: true })
+      ])
+      if (sessionResult.error) throw sessionResult.error
+      if (messageResult.error) throw messageResult.error
+
       setQuestions(qs || [])
-      setMessages([{
-        role: 'assistant',
-        content: 'Welcome back. You are in the ' + currentLayerLabel + ' layer.\n\nSubmit your working or ask Atlas a question to continue.'
-      }])
+      const resumedLayer = sessionResult.data.current_layer || 'foundation'
+      setCurrentLayer(resumedLayer)
+      const resumedQuestion = (qs || []).find(function (question) {
+        return question.id === sessionResult.data.current_question_id
+      }) || (qs || [])[0] || null
+      await persistCurrentQuestion(resumedQuestion)
+      if (messageResult.data?.length) {
+        setMessages(messageResult.data.map(function ({ role, content, viz }) {
+          return { role, content, viz }
+        }))
+      } else {
+        const resumedLabel = LAYERS.find(function (layer) {
+          return layer.id === resumedLayer
+        })?.label || resumedLayer
+        setMessages([{
+          role: 'assistant',
+          content: 'Welcome back. You are in the ' + resumedLabel + ' layer.\n\nSubmit your working or ask Atlas a question to continue.'
+        }])
+      }
     } catch (e) {
       setError(e.message)
     } finally {
@@ -324,11 +383,17 @@ export default function EnginePage() {
       const qs = await getQuestionsForSubType(user.id, topic, subType)
       const safeQs = qs || []
       setQuestions(safeQs)
-      const systemPrompt = getSystemPrompt(topic, subType, 'foundation', safeQs)
+      const activeQuestion = safeQs.length > 1 ? safeQs[1] : safeQs[0] || null
+      await persistCurrentQuestion(activeQuestion)
+      const systemPrompt = getSystemPrompt(topic, subType, 'foundation', safeQs, activeQuestion)
       const userMsg = getUserMessage('start', 'foundation')
-      const { text: reply, viz, usage } = await askClaude(systemPrompt, [{ role: 'user', content: userMsg }], user.id, sessionId, 'foundation_start')
+      const { text: reply, viz, usage } = await askClaude(systemPrompt, [{ role: 'user', content: userMsg }], sessionId, 'foundation_start')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
       setMessages([
+        { role: 'user', content: userMsg },
+        { role: 'assistant', content: reply, viz: viz || null }
+      ])
+      await persistMessages([
         { role: 'user', content: userMsg },
         { role: 'assistant', content: reply, viz: viz || null }
       ])
@@ -356,27 +421,27 @@ export default function EnginePage() {
     if (inputMode === 'clarify') setClarifyInput('')
     else setAnswerInput('')
     try {
-      const systemPrompt = getSystemPrompt(topic, subType, currentLayer, questions)
+      let activeQuestion = currentQuestion
+      if (action === 'next' && questions.length > 0) {
+        const currentIndex = questions.findIndex(function (question) {
+          return question.id === currentQuestion?.id
+        })
+        activeQuestion = questions[(currentIndex + 1) % questions.length]
+        await persistCurrentQuestion(activeQuestion)
+      }
+      const systemPrompt = getSystemPrompt(topic, subType, currentLayer, questions, activeQuestion)
       const trimmedMessages = newMessages.slice(-6).map(function(m) {
         return { role: m.role, content: m.content }
       })
-      const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'engine_turn')
+      const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, sessionId, 'engine_turn')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
       const assistantMsg = { role: 'assistant', content: reply, viz }
       setMessages(function (prev) { return [...prev, assistantMsg] })
 
-      // Persist both user message and assistant reply to DB
-      try {
-        await supabase.from('messages').insert([
-          { session_id: sessionId, role: 'user', content: input.trim() },
-          { session_id: sessionId, role: 'assistant', content: reply, viz: viz || null }
-        ])
-        await supabase.from('sessions').update({
-          last_active_at: new Date().toISOString()
-        }).eq('id', sessionId)
-      } catch (e) {
-        console.error('Failed to persist messages:', e)
-      }
+      await persistMessages([
+        { role: 'user', content: userContent },
+        { role: 'assistant', content: reply, viz: viz || null }
+      ])
       if (action !== 'clarify' && action !== 'next') {
         setShowErrorClassifier(true)
       }
@@ -405,6 +470,7 @@ export default function EnginePage() {
       const announcement = '[AI Variant #' + (variantCount + 1) + ']\n\n' + variantText
       const newMessages = [...messages, { role: 'assistant', content: announcement }]
       setMessages(newMessages)
+      await persistMessages([{ role: 'assistant', content: announcement }])
     } catch (e) {
       setError(e.message)
     } finally {
@@ -415,7 +481,7 @@ export default function EnginePage() {
   async function handleErrorClassify(errorType) {
     setShowErrorClassifier(false)
     try {
-      await supabase.from('attempts').insert({
+      const { error: attemptError } = await supabase.from('attempts').insert({
         session_id: sessionId,
         question_id: currentQuestion?.id || null,
         layer: currentLayer,
@@ -423,6 +489,7 @@ export default function EnginePage() {
         is_correct: errorType === null,
         error_type: errorType
       })
+      if (attemptError) throw attemptError
     } catch (e) {
       console.error('Failed to log attempt:', e)
     }
@@ -438,22 +505,31 @@ export default function EnginePage() {
     setError('')
     const newLayer = nextLayer.id
     try {
-      await supabase.from('sessions').update({ current_layer: newLayer }).eq('id', sessionId)
-    } catch (e) {
-      console.error('Failed to update session layer:', e)
-    }
-    setCurrentLayer(newLayer)
-    const userMsg = getUserMessage('next_layer', newLayer)
-    const newMessages = [...messages, { role: 'user', content: userMsg }]
-    setMessages(newMessages)
-    try {
-      const systemPrompt = getSystemPrompt(topic, subType, newLayer, questions)
+      const activeQuestion = questions[0] || null
+      const { error: layerError } = await supabase
+        .from('sessions')
+        .update({
+          current_layer: newLayer,
+          current_question_id: activeQuestion?.id || null
+        })
+        .eq('id', sessionId)
+      if (layerError) throw layerError
+      setCurrentLayer(newLayer)
+      setCurrentQuestion(activeQuestion)
+      const userMsg = getUserMessage('next_layer', newLayer)
+      const newMessages = [...messages, { role: 'user', content: userMsg }]
+      setMessages(newMessages)
+      const systemPrompt = getSystemPrompt(topic, subType, newLayer, questions, activeQuestion)
       const trimmedMessages = newMessages.slice(-6).map(function(m) {
         return { role: m.role, content: m.content }
       })
-      const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, user.id, sessionId, 'layer_transition')
+      const { text: reply, viz, usage } = await askClaude(systemPrompt, trimmedMessages, sessionId, 'layer_transition')
       if (usage) setSessionCost(function (prev) { return prev + estimateCost(usage.input_tokens, usage.output_tokens) })
       setMessages(function (prev) { return [...prev, { role: 'assistant', content: reply, viz: viz || null }] })
+      await persistMessages([
+        { role: 'user', content: userMsg },
+        { role: 'assistant', content: reply, viz: viz || null }
+      ])
     } catch (e) {
       setError(e.message)
     } finally {
@@ -463,10 +539,11 @@ export default function EnginePage() {
 
   async function handleEndSession() {
     try {
-      await supabase.from('sessions').update({
+      const { error: endError } = await supabase.from('sessions').update({
         current_layer: currentLayer,
         last_active_at: new Date().toISOString()
       }).eq('id', sessionId)
+      if (endError) throw endError
 
       // Generate session summary in background
       if (messages.length > 2) {
@@ -487,6 +564,7 @@ export default function EnginePage() {
                 systemPrompt: 'You are a concise session summariser. Write 3-5 sentences only. No preamble.',
                 messages: [{ role: 'user', content: summaryPrompt }],
                 context: 'session_summary',
+                sessionId,
                 maxTokens: 300
               })
             }

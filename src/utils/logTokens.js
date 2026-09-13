@@ -12,27 +12,6 @@ export function estimateCost(inputTokens, outputTokens, model = 'claude-haiku-4-
   return parseFloat((inputCost + outputCost).toFixed(6))
 }
 
-export async function logTokens({ userId, sessionId, inputTokens, outputTokens, model, context }) {
-  const resolvedModel = model || 'claude-haiku-4-5-20251001'
-  const pricing = MODEL_PRICING_USD_PER_M[resolvedModel] || MODEL_PRICING_USD_PER_M['claude-haiku-4-5-20251001']
-  try {
-    await supabase.from('token_logs').insert({
-      user_id: userId,
-      session_id: sessionId,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      model: resolvedModel,
-      context: context || 'engine',
-      estimated_cost_usd: estimateCost(inputTokens, outputTokens, resolvedModel),
-      input_cost_per_m: pricing.input,
-      output_cost_per_m: pricing.output,
-      cost_currency: 'USD'
-    })
-  } catch (e) {
-    console.error('Token log failed:', e)
-  }
-}
-
 export async function getSessionTokens(sessionId) {
   const { data, error } = await supabase
     .from('token_logs')

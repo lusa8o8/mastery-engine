@@ -167,6 +167,8 @@ Safe to run documentation, fixture capture, and environment inventory in paralle
 
 ## S1 — Reproducible Database, Security and Prototype Stabilization
 
+Implementation evidence: [`docs/architecture/s1/README.md`](s1/README.md).
+
 ### Purpose
 
 Remove immediate hazards and make the current system reproducible before introducing the replacement.

@@ -1,5 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  createAdminClient,
+  errorResponse,
+  HttpError,
+  requireUser
+} from '../_shared/http.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,15 +110,51 @@ serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization')
-    const { systemPrompt, messages, sessionId, context, userId, maxTokens } = await req.json()
-    const body = { systemPrompt, messages, sessionId, context, userId, maxTokens }
+    const admin = createAdminClient()
+    const user = await requireUser(req, admin)
+    const { systemPrompt, messages, sessionId, simulationId, context, maxTokens } = await req.json()
+    const body = { systemPrompt, messages, sessionId, simulationId, context, maxTokens }
 
-    if (!systemPrompt || !messages) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      })
+    if (!systemPrompt || !Array.isArray(messages)) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'systemPrompt and messages are required.')
+    }
+
+    // A caller may name a session, but only the verified owner can use it for
+    // model context or receive usage attributed to it.
+    if (sessionId) {
+      const { data: ownedSession, error: sessionError } = await admin
+        .from('sessions')
+        .select('id')
+        .eq('id', sessionId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (sessionError) throw sessionError
+      if (!ownedSession) {
+        throw new HttpError(403, 'SESSION_FORBIDDEN', 'This session does not belong to the current student.')
+      }
+    }
+
+    if (SONNET_CONTEXTS.includes(context)) {
+      if (!simulationId) {
+        throw new HttpError(400, 'SIMULATION_REQUIRED', 'A claimed simulation is required for this request.')
+      }
+
+      const isGeneration = context === 'exam_simulation'
+      const requestColumn = isGeneration ? 'generation_requested_at' : 'marking_requested_at'
+      const requiredStatus = isGeneration ? 'generating' : 'marking'
+      const { data: claimed, error: claimError } = await admin
+        .from('exam_simulations')
+        .update({ [requestColumn]: new Date().toISOString() })
+        .eq('id', simulationId)
+        .eq('user_id', user.id)
+        .eq('status', requiredStatus)
+        .is(requestColumn, null)
+        .select('id')
+        .maybeSingle()
+      if (claimError) throw claimError
+      if (!claimed) {
+        throw new HttpError(409, 'SIMULATION_ALREADY_CLAIMED', 'This model request was already started or is not ready.')
+      }
     }
 
     const usesSonnet = SONNET_CONTEXTS.includes(body.context)
@@ -167,15 +208,11 @@ serve(async (req) => {
     const usage = anthropicData.usage
 
     // Log tokens server-side
-    if (usage && sessionId && userId) {
+    if (usage) {
       const estimated = estimateCostUsd(selectedModel, usage.input_tokens, usage.output_tokens)
-      const supabaseClient = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      )
-      await supabaseClient.from('token_logs').insert({
-        user_id: userId,
-        session_id: sessionId,
+      const { error: logError } = await admin.from('token_logs').insert({
+        user_id: user.id,
+        session_id: sessionId || null,
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
         model: selectedModel,
@@ -185,6 +222,7 @@ serve(async (req) => {
         output_cost_per_m: estimated.outputCostPerM,
         cost_currency: 'USD'
       })
+      if (logError) console.error('Token log failed', logError)
     }
 
     return new Response(JSON.stringify({ text, viz, usage }), {
@@ -192,9 +230,6 @@ serve(async (req) => {
     })
 
   } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    return errorResponse(e, corsHeaders)
   }
 })
