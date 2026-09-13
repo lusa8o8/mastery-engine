@@ -1,6 +1,6 @@
 # S1 — Reproducible Database, Security and Prototype Stabilization
 
-Status: **in progress; database/security slice verified locally, not applied to production**
+Status: **production infrastructure deployed; authenticated journey smoke pass pending**
 
 In plain language: this stage makes today’s Atlas safer and repeatable before its larger architecture changes. It is not the new tutoring design.
 
@@ -59,8 +59,21 @@ Do not run the migration merely because the local replay passes. Before deployme
 4. Apply the older baseline migration deliberately with the Supabase CLI’s include-all behavior.
 5. Run authenticated two-account smoke tests immediately after deployment.
 
+## Production deployment evidence — 2026-09-13
+
+- Fresh pre-deployment backup and isolated restore rehearsal: pass (`20260913-155340`).
+- Four reviewed migrations applied to project `jipewywqflgandjcqbjl` in the documented order.
+- Remote database lint: pass, with no schema errors.
+- Production structure: 10 public tables, 16 foreign keys, 10 RLS-enabled public tables, 18 public policies and 4 Storage policies.
+- Durable session-question linkage and all four paper extraction-state columns: present.
+- Transactional functions `claim_exam_generation`, `claim_exam_marking`, `claim_paper_extraction` and `complete_paper_extraction`: present.
+- `atlas-chat` v10, `atlas-extract` v5 and `atlas-variant` v2: active with JWT verification enabled.
+- Unauthenticated calls to all three functions: denied with HTTP 401.
+- Frontend commit `1ed4796` pushed to `main`; GitHub CI passed and the Vercel production domain returned HTTP 200 from a fresh deployment.
+- Authenticated two-account journey checks remain open because the browser-control connection was unavailable during rollout. Infrastructure checks must not be treated as a substitute for those product checks.
+
 ## Remaining S1 work
 
 - Make non-simulator token allowance decisions fully server-owned.
 - Add authenticated function-level regression tests against a non-production Supabase environment.
-- Deploy the reviewed hotfix slice and execute the complete current-journey smoke suite.
+- Execute and record the authenticated two-account current-journey smoke suite.

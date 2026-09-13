@@ -1,6 +1,6 @@
 # S1 Production Rollout
 
-Status: **ready for owner-authorized execution; not yet deployed**
+Status: **deployed on 2026-09-13; authenticated journey smoke pass pending**
 
 This is a short coordinated cutover because the new browser code, database functions, and Edge Functions depend on one another. All current accounts are owner-controlled test accounts, but the sequence remains fail-closed.
 
@@ -33,6 +33,16 @@ This is a short coordinated cutover because the new browser code, database funct
 - Start, answer, submit, and mark the exam; confirm a duplicate marking claim is rejected.
 - With User B, attempt to access User A’s known session ID and paper path; both must be denied.
 - Confirm function logs contain structured codes and no credentials or document bodies.
+
+### Recorded rollout checks — 2026-09-13
+
+- Backup and isolated restore rehearsal: pass (`20260913-155340`).
+- Database migration list and remote lint: pass.
+- Database security structure and all four transactional functions: present.
+- Edge Functions: active with JWT verification; unauthenticated requests return HTTP 401.
+- GitHub CI for `1ed4796`: pass.
+- Vercel production endpoint: HTTP 200 with a fresh deployment timestamp.
+- The signed-in User A/User B journey checks above are still required. Browser control was unavailable during the rollout, so no authenticated result is inferred from the infrastructure checks.
 
 ## Forward-fix and recovery
 
