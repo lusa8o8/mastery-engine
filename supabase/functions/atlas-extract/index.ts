@@ -5,6 +5,10 @@ import {
   HttpError,
   requireUser
 } from '../_shared/http.ts'
+import {
+  claimModelAllowance,
+  settleModelAllowance
+} from '../_shared/modelAllowance.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -89,6 +93,11 @@ serve(async (req) => {
 
   let admin: ReturnType<typeof createAdminClient> | null = null
   let claimedPaperId: string | null = null
+  let allowanceId: string | null = null
+  let allowanceUserId: string | null = null
+  let allowanceSettled = false
+  let actualInputTokens = 0
+  let actualOutputTokens = 0
 
   try {
     admin = createAdminClient()
@@ -169,6 +178,17 @@ serve(async (req) => {
       ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
       : { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64 } }
 
+    // PDF/image tokenization is provider-specific, so reserve a conservative
+    // bounded estimate and settle against the provider's exact usage.
+    allowanceId = await claimModelAllowance(
+      admin,
+      user.id,
+      'paper_extraction',
+      fileType === 'pdf' ? 100000 : 30000,
+      9216
+    )
+    allowanceUserId = user.id
+
     const anthropicHeaders = {
       'Content-Type': 'application/json',
       'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '',
@@ -194,6 +214,8 @@ serve(async (req) => {
     })
 
     const questionsData = await questionsResponse.json()
+    actualInputTokens += Number(questionsData.usage?.input_tokens || 0)
+    actualOutputTokens += Number(questionsData.usage?.output_tokens || 0)
     if (!questionsResponse.ok) {
       throw new Error(questionsData.error?.message || 'Anthropic API error on questions')
     }
@@ -221,6 +243,8 @@ serve(async (req) => {
     })
 
     const metadataData = await metadataResponse.json()
+    actualInputTokens += Number(metadataData.usage?.input_tokens || 0)
+    actualOutputTokens += Number(metadataData.usage?.output_tokens || 0)
     const metadata = metadataData.ok !== false
       ? parseMetadata(metadataData.content?.[0]?.text || '')
       : null
@@ -253,8 +277,18 @@ serve(async (req) => {
     if (dbError) throw dbError
     claimedPaperId = null
 
-    const inputTokens = Number(questionsData.usage?.input_tokens || 0) + Number(metadataData.usage?.input_tokens || 0)
-    const outputTokens = Number(questionsData.usage?.output_tokens || 0) + Number(metadataData.usage?.output_tokens || 0)
+    await settleModelAllowance(
+      admin,
+      allowanceId,
+      user.id,
+      actualInputTokens + actualOutputTokens > 0 ? 'completed' : 'failed',
+      actualInputTokens,
+      actualOutputTokens
+    )
+    allowanceSettled = true
+
+    const inputTokens = actualInputTokens
+    const outputTokens = actualOutputTokens
     if (inputTokens + outputTokens > 0) {
       const { error: logError } = await admin.from('token_logs').insert({
         user_id: user.id,
@@ -266,7 +300,8 @@ serve(async (req) => {
         estimated_cost_usd: Number((inputTokens / 1_000_000 * 0.80 + outputTokens / 1_000_000 * 4.00).toFixed(8)),
         input_cost_per_m: 0.80,
         output_cost_per_m: 4.00,
-        cost_currency: 'USD'
+        cost_currency: 'USD',
+        model_call_allowance_id: allowanceId
       })
       if (logError) console.error('Token log failed', logError)
     }
@@ -276,6 +311,17 @@ serve(async (req) => {
     })
 
   } catch (e) {
+    if (admin && allowanceId && allowanceUserId && !allowanceSettled) {
+      const consumedTokens = actualInputTokens + actualOutputTokens
+      await settleModelAllowance(
+        admin,
+        allowanceId,
+        allowanceUserId,
+        consumedTokens > 0 ? 'completed' : 'failed',
+        actualInputTokens,
+        actualOutputTokens
+      ).catch(console.error)
+    }
     if (admin && claimedPaperId) {
       const message = e instanceof Error ? e.message.slice(0, 1000) : 'Unknown extraction error'
       const { error: failureError } = await admin

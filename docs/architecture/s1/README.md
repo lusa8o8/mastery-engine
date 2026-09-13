@@ -1,6 +1,6 @@
 # S1 — Reproducible Database, Security and Prototype Stabilization
 
-Status: **production infrastructure deployed; authenticated journey smoke pass pending**
+Status: **production base deployed; model-allowance rollout and authenticated journey smoke pass pending**
 
 In plain language: this stage makes today’s Atlas safer and repeatable before its larger architecture changes. It is not the new tutoring design.
 
@@ -21,6 +21,9 @@ In plain language: this stage makes today’s Atlas safer and repeatable before 
 - Added retry-safe paper extraction states and an atomic question-replacement transaction.
 - Removed the unnecessary upload-time signed URL and added orphan-file cleanup when metadata insertion fails.
 - Added deterministic S1 security controls and CI.
+- Added an atomic 30-day model-token reservation boundary for tutoring, variants and paper extraction.
+- Moved route selection and output-token caps into the Edge Functions; callers can no longer raise a model output allowance.
+- Added expiring claims and provider-usage settlement so concurrent calls cannot race the same allowance and abandoned pre-call reservations recover safely.
 
 ## Local database evidence
 
@@ -46,6 +49,8 @@ The full migration history was replayed into an empty PostgreSQL 17.11 database 
 | Extraction completion replay | Pass — second run replaced the first question; one row remained |
 | Client token-log insert privilege | Denied |
 | Linked Supabase migration dry run | Pass — exactly four S1 migrations, in the intended order |
+| Model-allowance migration replay | Pass — additive migration executed in the isolated PostgreSQL rehearsal |
+| 30-day allowance boundary | Pass — first reservation accepted, over-limit reservation denied, settled usage released unused capacity |
 
 ## Production rule
 
@@ -74,6 +79,6 @@ Do not run the migration merely because the local replay passes. Before deployme
 
 ## Remaining S1 work
 
-- Make non-simulator token allowance decisions fully server-owned.
 - Add authenticated function-level regression tests against a non-production Supabase environment.
 - Execute and record the authenticated two-account current-journey smoke suite.
+- Deploy and verify the model-allowance migration and updated functions through the coordinated rollout procedure.

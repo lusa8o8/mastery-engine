@@ -70,6 +70,34 @@ test('simulator quota claims are transactional and model calls consume a claim o
   assert.match(quotaSql, /revoke insert, update, delete on public\.token_logs from authenticated/i)
 })
 
+test('non-simulator model calls reserve server-owned token allowance', async () => {
+  const allowanceSql = await read('supabase/migrations/202609130004_add_model_call_allowances.sql')
+  const allowanceHelper = await read('supabase/functions/_shared/modelAllowance.ts')
+  const chat = await read('supabase/functions/atlas-chat/index.ts')
+  const variant = await read('supabase/functions/atlas-variant/index.ts')
+  const extract = await read('supabase/functions/atlas-extract/index.ts')
+
+  assert.match(allowanceSql, /create table if not exists public\.model_call_allowances/i)
+  assert.match(allowanceSql, /create or replace function public\.claim_model_allowance/i)
+  assert.match(allowanceSql, /create or replace function public\.settle_model_allowance/i)
+  assert.match(allowanceSql, /pg_advisory_xact_lock/i)
+  assert.match(allowanceSql, /created_at >= now\(\) - interval '30 days'/i)
+  assert.match(allowanceSql, /revoke all on function public\.claim_model_allowance[^;]+authenticated/i)
+  assert.match(allowanceSql, /grant execute on function public\.claim_model_allowance[^;]+service_role/i)
+
+  assert.match(allowanceHelper, /MODEL_ALLOWANCE_EXHAUSTED/)
+  for (const source of [chat, variant, extract]) {
+    assert.match(source, /claimModelAllowance\(/)
+    assert.match(source, /settleModelAllowance\(/)
+  }
+
+  assert.match(chat, /OUTPUT_TOKENS_BY_CONTEXT/)
+  assert.match(chat, /max_tokens: maxOutputTokens/)
+  assert.doesNotMatch(chat, /body\.maxTokens|maxTokens\s*\|\|/)
+  assert.match(variant, /'question_variant'/)
+  assert.match(extract, /'paper_extraction'/)
+})
+
 test('tutor question IDs and extraction retries are durable', async () => {
   const questionSql = await read('supabase/migrations/202609130002_add_session_current_question.sql')
   const extractionSql = await read('supabase/migrations/202609130003_add_paper_extraction_state.sql')

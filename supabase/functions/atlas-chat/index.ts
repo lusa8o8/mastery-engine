@@ -5,6 +5,11 @@ import {
   HttpError,
   requireUser
 } from '../_shared/http.ts'
+import {
+  claimModelAllowance,
+  estimateTextTokens,
+  settleModelAllowance
+} from '../_shared/modelAllowance.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -88,6 +93,16 @@ const RENDER_VIZ_TOOL = {
 
 const SONNET_CONTEXTS = ['exam_simulation', 'exam_marking']
 
+const OUTPUT_TOKENS_BY_CONTEXT: Record<string, number> = {
+  foundation_start: 2048,
+  engine_turn: 2048,
+  layer_transition: 2048,
+  session_summary: 300,
+  pattern_analysis: 2048,
+  exam_simulation: 8192,
+  exam_marking: 8192
+}
+
 const MODEL_PRICING_USD_PER_M: Record<string, { input: number; output: number }> = {
   'claude-haiku-4-5-20251001': { input: 0.80, output: 4.00 },
   'claude-sonnet-4-6': { input: 3.00, output: 15.00 }
@@ -112,11 +127,18 @@ serve(async (req) => {
   try {
     const admin = createAdminClient()
     const user = await requireUser(req, admin)
-    const { systemPrompt, messages, sessionId, simulationId, context, maxTokens } = await req.json()
-    const body = { systemPrompt, messages, sessionId, simulationId, context, maxTokens }
+    const { systemPrompt, messages, sessionId, simulationId, context } = await req.json()
 
-    if (!systemPrompt || !Array.isArray(messages)) {
-      throw new HttpError(400, 'INVALID_REQUEST', 'systemPrompt and messages are required.')
+    const supportedContext = typeof context === 'string'
+      && Object.prototype.hasOwnProperty.call(OUTPUT_TOKENS_BY_CONTEXT, context)
+    if (typeof systemPrompt !== 'string' || !Array.isArray(messages) || !supportedContext) {
+      throw new HttpError(400, 'INVALID_REQUEST', 'A supported context, systemPrompt and messages are required.')
+    }
+
+    const maxOutputTokens = OUTPUT_TOKENS_BY_CONTEXT[context]
+    const estimatedInputTokens = estimateTextTokens({ systemPrompt, messages })
+    if (estimatedInputTokens > 120000) {
+      throw new HttpError(413, 'MODEL_INPUT_TOO_LARGE', 'This Atlas request is too large to process safely.')
     }
 
     // A caller may name a session, but only the verified owner can use it for
@@ -157,37 +179,70 @@ serve(async (req) => {
       }
     }
 
-    const usesSonnet = SONNET_CONTEXTS.includes(body.context)
+    const usesSonnet = SONNET_CONTEXTS.includes(context)
 
     const selectedModel = usesSonnet ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001'
 
-    const anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '',
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': 'prompt-caching-2024-07-31'
-      },
-      body: JSON.stringify({
-        model: selectedModel,
-        max_tokens: body.maxTokens || 2048,
-        system: [
-          {
-            type: 'text',
-            text: systemPrompt,
-            cache_control: { type: 'ephemeral' }
-          }
-        ],
-        messages,
-        ...(!usesSonnet ? {
-          tools: [RENDER_VIZ_TOOL],
-          tool_choice: { type: 'auto' }
-        } : {})
-      })
-    })
+    // Simulator routes already consume their own atomic generation/marking
+    // claims. Every other model route reserves token capacity here first.
+    let allowanceId: string | null = null
+    if (!usesSonnet) {
+      allowanceId = await claimModelAllowance(
+        admin,
+        user.id,
+        'atlas_chat',
+        estimatedInputTokens,
+        maxOutputTokens
+      )
+    }
 
-    const anthropicData = await anthropicResponse.json()
+    let anthropicResponse: Response
+    let anthropicData: any
+    try {
+      anthropicResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '',
+          'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31'
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          max_tokens: maxOutputTokens,
+          system: [
+            {
+              type: 'text',
+              text: systemPrompt,
+              cache_control: { type: 'ephemeral' }
+            }
+          ],
+          messages,
+          ...(!usesSonnet ? {
+            tools: [RENDER_VIZ_TOOL],
+            tool_choice: { type: 'auto' }
+          } : {})
+        })
+      })
+
+      anthropicData = await anthropicResponse.json()
+      if (allowanceId) {
+        const usage = anthropicData.usage
+        await settleModelAllowance(
+          admin,
+          allowanceId,
+          user.id,
+          usage ? 'completed' : 'failed',
+          Number(usage?.input_tokens || 0),
+          Number(usage?.output_tokens || 0)
+        )
+      }
+    } catch (error) {
+      if (allowanceId) {
+        await settleModelAllowance(admin, allowanceId, user.id, 'failed').catch(console.error)
+      }
+      throw error
+    }
 
     if (!anthropicResponse.ok) {
       throw new Error(anthropicData.error?.message || 'Anthropic API error')
@@ -220,7 +275,8 @@ serve(async (req) => {
         estimated_cost_usd: estimated.cost,
         input_cost_per_m: estimated.inputCostPerM,
         output_cost_per_m: estimated.outputCostPerM,
-        cost_currency: 'USD'
+        cost_currency: 'USD',
+        model_call_allowance_id: allowanceId
       })
       if (logError) console.error('Token log failed', logError)
     }

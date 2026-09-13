@@ -1,6 +1,6 @@
 # S1 Production Rollout
 
-Status: **deployed on 2026-09-13; authenticated journey smoke pass pending**
+Status: **base deployed on 2026-09-13; model-allowance follow-up and authenticated journey smoke pass pending**
 
 This is a short coordinated cutover because the new browser code, database functions, and Edge Functions depend on one another. All current accounts are owner-controlled test accounts, but the sequence remains fail-closed.
 
@@ -14,6 +14,10 @@ This is a short coordinated cutover because the new browser code, database funct
    - `202609130001_add_transactional_simulator_quotas.sql`
    - `202609130002_add_session_current_question.sql`
    - `202609130003_add_paper_extraction_state.sql`
+
+For the model-allowance follow-up, repeat the same preflight and confirm the dry run contains only:
+
+- `202609130004_add_model_call_allowances.sql`
 
 ## Coordinated deployment
 
@@ -33,6 +37,8 @@ This is a short coordinated cutover because the new browser code, database funct
 - Start, answer, submit, and mark the exam; confirm a duplicate marking claim is rejected.
 - With User B, attempt to access User A’s known session ID and paper path; both must be denied.
 - Confirm function logs contain structured codes and no credentials or document bodies.
+- Confirm a normal tutor turn, generated variant, and paper extraction each create and settle one server-owned model allowance.
+- Confirm an over-limit non-simulator request returns structured code `MODEL_ALLOWANCE_EXHAUSTED` without contacting the model provider.
 
 ### Recorded rollout checks — 2026-09-13
 
