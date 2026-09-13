@@ -45,16 +45,16 @@ export default function UploadPage() {
     setFiles(prev => prev.filter(f => f.name !== name))
   }
 
-  async function checkDuplicates(filesToCheck) {
+  async function findExistingPapers(filesToCheck) {
     try {
       const { data: existingPapers } = await supabase
         .from('papers')
-        .select('name, file_url')
+        .select('id, name, file_url, extraction_status')
         .eq('user_id', user.id)
-      if (!existingPapers || existingPapers.length === 0) return []
-      const duplicates = []
+      if (!existingPapers || existingPapers.length === 0) return new Map()
+      const matches = new Map()
       for (const file of filesToCheck) {
-        const isDuplicate = existingPapers.some(p => {
+        const existing = existingPapers.find(p => {
           const storageName = p.file_url
             .split('?')[0]
             .split('/')
@@ -63,11 +63,11 @@ export default function UploadPage() {
           const uploadName = file.name.toLowerCase()
           return storageName === uploadName || p.name === paperName.trim()
         })
-        if (isDuplicate) duplicates.push(file.name)
+        if (existing) matches.set(file.name, existing)
       }
-      return duplicates
+      return matches
     } catch {
-      return []
+      return new Map()
     }
   }
 
@@ -90,22 +90,21 @@ export default function UploadPage() {
     setUploading(true)
     setResults([])
 
-    const duplicates = await checkDuplicates(files)
-    if (duplicates.length > 0) {
-      setUploading(false)
-      setResults(files.map(f => ({
-        name: f.name,
-        status: duplicates.includes(f.name) ? 'duplicate' : 'pending'
-      })))
-      return
-    }
+    const existingPapers = await findExistingPapers(files)
 
     const outcomes = []
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       const name = getNameForFile(file, i)
+      const existing = existingPapers.get(file.name)
+      if (existing && !['pending', 'failed'].includes(existing.extraction_status)) {
+        outcomes.push({ name: file.name, status: 'duplicate' })
+        continue
+      }
       try {
-        const paper = await uploadPaper(file, user.id, name, assessmentType)
+        // A prior request may have uploaded the private object successfully but
+        // failed before extraction. Reuse that row so retrying is idempotent.
+        const paper = existing || await uploadPaper(file, user.id, name, assessmentType)
         const count = await extractAndSave(paper)
         outcomes.push({ name: file.name, status: 'done', count })
       } catch (err) {

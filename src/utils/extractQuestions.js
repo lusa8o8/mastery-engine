@@ -1,7 +1,12 @@
 import { supabase } from '../api/supabase'
 
 export async function extractAndSave(paper) {
-  const { data: { session } } = await supabase.auth.getSession()
+  // Extraction can begin after a long upload or an idle browser session. Force a
+  // refresh here so the Edge Function never receives a stale cached access token.
+  const { data: { session }, error: sessionError } = await supabase.auth.refreshSession()
+  if (sessionError || !session?.access_token) {
+    throw new Error('Your session has expired. Please sign in again and retry extraction.')
+  }
 
   const response = await fetch(
     `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/atlas-extract`,
