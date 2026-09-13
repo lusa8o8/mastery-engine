@@ -221,6 +221,23 @@ textarea {
   min-height: 100px;
 }
 
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--fg-muted);
+  font-size: 0.78rem;
+  margin: 1.25rem 0;
+  white-space: nowrap;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
 /* ── Divider ── */
 
 hr,

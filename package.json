@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test:s0": "node --test tests/s0-controls.test.mjs",
     "test:s1": "node --test tests/s1-security-controls.test.mjs",
+    "test:oauth": "node --test tests/oauth-auth.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

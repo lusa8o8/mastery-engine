@@ -14,6 +14,7 @@
     { "key": "atlas_marking_v2", "owner": "assessment", "default": false, "kill_switch": true, "purpose": "Verified marking and durable remediation routing" },
     { "key": "atlas_chat_shell", "owner": "frontend", "default": false, "kill_switch": true, "purpose": "Chat-first shell, slash commands and entity mentions" },
     { "key": "atlas_resource_focus", "owner": "frontend", "default": false, "kill_switch": true, "purpose": "Desktop source viewer with region focus" },
+    { "key": "atlas_google_auth", "owner": "platform", "default": false, "kill_switch": true, "purpose": "Google social login through the existing Supabase Auth principal boundary" },
     { "key": "atlas_contributions", "owner": "library", "default": false, "kill_switch": true, "purpose": "Consent-based contribution and public-library workflow" }
   ]
 }

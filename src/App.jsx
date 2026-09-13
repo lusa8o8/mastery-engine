@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import AuthPage from './pages/AuthPage'
 import LandingPage from './pages/LandingPage'
@@ -13,8 +13,9 @@ import SimulatePage from './pages/SimulatePage'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return null
-  if (!user) return <Navigate to="/auth" replace />
+  if (!user) return <Navigate to="/auth" replace state={{ from: location }} />
   return children
 }
 
