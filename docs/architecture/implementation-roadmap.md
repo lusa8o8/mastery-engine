@@ -223,12 +223,16 @@ Freeze shared language in dependency-sized packs. Contract-first remains the mai
 
 - `study_spaces`, `learning_plans`, `learning_objectives`, `conversation_threads`, `conversation_episodes`.
 - `learner_states`, `learning_sessions`, `tutor_turns`, `attempts`.
+- Learning-objective origin fields that can reference a remediation assignment without making display labels or URL segments authoritative.
+- `study_spaces` support a deterministic `exam_remediation` goal type, an optional student-edited display name, and a stable originating exam-attempt reference. One active exam-review study space exists per user and exam attempt.
+- `learning_sessions` are resumable executions inside a study space; `conversation_episodes` may roll over for context control without changing the study space, objective, or remediation identity.
 
 ### S2D — Assessment contracts
 
 - `pattern_snapshots`, `pattern_evidence`.
 - `exam_blueprints`, `exams`, `exam_questions`, `solutions`, `marking_schemes`, `exam_attempts`, `marking_results`.
-- `remediation_assignments`.
+- `remediation_assignments`, with stable links to the originating exam, exam question, marking result, canonical competency, target learning objective, status, and completion criteria.
+- Remediation status is versioned and allowlisted: `suggested`, `active`, `paused`, `completed`, `review_required`, or `superseded`. Re-marking may supersede an earlier suggestion but never silently rewrites its evidence history.
 
 ### S2E — Contribution and library contracts
 
@@ -246,6 +250,8 @@ Freeze shared language in dependency-sized packs. Contract-first remains the mai
 - Slash-command names map to versioned application commands; mention labels map to stable typed IDs and never carry authorization.
 - Study-space identity is separate from its current topic, learning layer, and conversation thread.
 - Resource-set scopes are immutable snapshots; refresh creates a new version rather than silently changing active coverage.
+- Exam remediation preserves its full origin chain across navigation and resume; route text and fuzzy topic-name matching are never the source of truth.
+- System display names are derived from stored exam, question, and concept metadata. A student rename changes only the display label, never identity, authorization, routing, or idempotency.
 
 ### API contracts
 
@@ -410,11 +416,22 @@ Decompose monolithic pages without prematurely changing learning behavior.
 - Add a discoverable command registry: `/recent`, `/resources`, `/upload`, `/progress`, and `/patterns` remain deterministic UI commands; `/learn`, `/quiz`, `/exam`, `/clarify`, `/next`, and `/variant` dispatch typed workflow commands.
 - Add a grouped `@` entity picker whose resource labels resolve to stable IDs and fresh authorization; defer canonical topic mentions until S7 taxonomy stability passes.
 - Render upload progress, recent study spaces, resource management, progress, patterns, and library results as application-owned cards/drawers rather than model prose.
+- Group exam-routed objectives under one Exam Review card per exam attempt; show the active objective, remediation stage, completed/total weak areas, and Continue action without exposing technical session or episode IDs.
 - Keep legacy Home, Upload, and Vault routes until their management and journey responsibilities have verified replacements.
 
 ### Verified simulator/progress-rail baseline
 
-A live Chrome review of an existing marked simulation on 2026-09-10 confirmed that the useful question-navigation interaction can be retained, but its layout mechanics should not be copied unchanged into the tutoring workspace.
+An authenticated in-app Browser review of an existing marked simulation on 2026-09-13 confirmed that the useful question-navigation interaction can be retained, but its layout mechanics should not be copied unchanged into the tutoring workspace. The review also followed a `Practice` action through to a live Atlas foundation session, confirming the current exam-to-tutor handoff described in S11.
+
+These observations do **not** reopen S1. They are allocated by responsibility:
+
+| Finding | Owning segment | Plain-language reason |
+|---|---|---|
+| Fixed two-column simulator grid and mobile squeezing | S5 Frontend | This is a responsive layout/component problem, not a database or security repair. |
+| Reusable exam/tutor progress navigator | S5 with S9 fixtures | Build the visual shell in S5; supply real learning objectives and mastery states from S9. |
+| Preserve simulation, question, marking-result and competency provenance | S2C/S2D contracts | The IDs and lifecycle must be defined before either workflow relies on them. |
+| Idempotent `Practice` command and evidence-linked Atlas handoff | S11, integrating S9 | S11 owns remediation; S9 owns the durable learning objective that receives it. |
+| Responsive, accessibility and handoff regression coverage | S4/S5/S11 | The harness measures the behavior, the frontend owns layout, and remediation owns routing correctness. |
 
 | View | Main workspace | Rail | Observed behaviour |
 |---|---:|---:|---|
@@ -566,6 +583,8 @@ diagnosing -> teaching -> worked_example -> guided_attempt
 - Deterministic question selection constraints with model assistance only where ambiguity remains.
 - Structured tutor-turn output: message, evidence anchors, assessment, error type, confidence, next activity, and proposed transition.
 - Host mastery policy using attempt evidence, independence, difficulty, recency, and transfer performance.
+- Deterministic remediation placement policy selects the starting stage from accepted marking evidence and prior learner state. Blank or prerequisite failures may begin at diagnosis/foundation; a specific procedural gap may begin at a worked or guided attempt; a minor error with prior mastery may begin at exam/trap practice; strong performance may begin at transfer. The model may propose but cannot persist placement.
+- Reuse an active remediation objective idempotently when its assignment is selected again. Evidence from another compatible learning plan may inform learner state, but Atlas never silently merges study spaces with different goals or scope snapshots.
 - Durable resume from stored state rather than reconstructed chat history.
 - Bounded math verification, source retrieval, and visualization tools with matched tool-result loops.
 - Session summarization as derived state, never the source of truth.
@@ -580,6 +599,7 @@ diagnosing -> teaching -> worked_example -> guided_attempt
 - Mobile mode passes journey and accessibility tests.
 - A resource-scoped plan cannot select an unrelated curriculum objective, and every assessed item names its scope snapshot and source or labelled transfer provenance.
 - Long-history and device-switch tests resume the same study space, objective, evidence, and pending activity without replaying the full transcript.
+- An exam-routed objective does not begin a model turn until its exam, question, marking result, remediation assignment, authorized scope, learner state, and placement decision have been loaded and validated.
 
 ### Parallelism
 
@@ -639,12 +659,49 @@ Turn exam performance into a trustworthy learning objective and close the loop.
 
 The current prototype's `Practice` action inserts a generic session at the `foundation` layer and navigates to `/engine/:topic__:subtopic__:sessionId`. Preserve the immediate handoff experience, but replace that implicit route with an idempotent application command that creates or resumes a durable remediation assignment linked to the originating simulation, question, marking result, and canonical competency. The shared `ProgressRail` should display that linkage and completion state without becoming the authority for either workflow.
 
+### Exam-routed session identity and state
+
+Treat the exam review, remediation objective, learning session, and conversation history as separate identities:
+
+| Record | Example display | Responsibility |
+|---|---|---|
+| Exam Review study space | `Review · Simulated Exam — 22 May` | Durable container for every weak area from one user/exam attempt; this is the Recent card. |
+| Learning objective | `De Morgan's Laws · Question 1` | The competency and source question currently being remediated. |
+| Learning session | Not normally named | One resumable execution of the objective, including its current stage and pending activity. |
+| Conversation episode | Hidden | A bounded transcript window that may roll over without resetting learning state. |
+
+```text
+marked exam attempt
+        |
+        v
+one Exam Review study space
+        |
+        +-- suggested remediation: Q1 / De Morgan's Laws
+        +-- active remediation: Q2 / Complex Numbers
+        +-- completed remediation: Q4 / Factor Theorem
+```
+
+The marking workflow creates versioned `suggested` remediation assignments. Selecting `Practice` issues `start_or_resume_remediation(remediation_assignment_id)` with an idempotency key derived from the authenticated user, exam attempt, accepted marking result, question, and canonical competency. The command:
+
+1. Re-authorizes the exam attempt, evidence, and scope snapshot.
+2. Creates or returns the single Exam Review study space for that exam attempt.
+3. Creates or returns the assignment's single target learning objective and active learning session.
+4. Applies the host-owned placement policy rather than defaulting every student to `foundation`.
+5. Reads back the persisted links and state before returning a stable ID-based route such as `/study-spaces/:studySpaceId?objective=:objectiveId`.
+6. Loads the origin evidence and durable learner state before Atlas may produce its first turn.
+
+Repeated clicks, refreshes, retries, and device changes return the same active objective. A compatible objective elsewhere may contribute learner evidence, but it is not silently merged into the exam-review study space. This keeps exam-specific context and resource authorization intact while preventing duplicate Recent cards. System names are deterministic fallbacks; students may rename a study space without changing any IDs or links.
+
 ### Exit gate
 
 - Blank, contradictory, and non-markable cases behave deterministically.
 - Human marking agreement meets ratified exact/within-one-mark and error-category thresholds.
 - Every Practice action resolves to a canonical objective or explicitly reports no safe match.
 - Completion updates the originating remediation assignment and learner state.
+- One exam attempt produces at most one active Exam Review study space and one target objective per remediation assignment under retries and concurrent clicks.
+- Recent cards, progress navigation, reloads, and cross-device resume show the same active objective and completed/total remediation count.
+- Placement tests prove that prior learner evidence and diagnosed error type select an allowed starting stage; no model output or hard-coded `foundation` default can bypass host policy.
+- Renaming any visible exam-review or objective label cannot alter routing, scope, authorization, or resume behavior.
 
 ### Parallelism
 
@@ -786,7 +843,7 @@ Parallel lanes:
 | Marking evaluation | S11 datasets and graders | S10 solution/mark-scheme schema frozen |
 | Remediation | S11 objective mapping/UI | S9 objective contract frozen |
 
-Integration gate: an accepted pattern snapshot produces a validated exam; a submitted attempt produces consistent marking and an evidence-linked Atlas remediation session.
+Integration gate: an accepted pattern snapshot produces a validated exam; a submitted attempt produces consistent marking and one evidence-linked Exam Review study space. Every Practice action idempotently focuses its canonical remediation objective, preserves exam/question/result/scope provenance, applies deterministic starting-stage placement, survives retry and device change without duplication, and reports completion back to the originating assignment.
 
 ## Wave D — Network and Rollout
 
