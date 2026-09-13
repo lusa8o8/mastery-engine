@@ -1,6 +1,6 @@
 # S1 Production Rollout
 
-Status: **base and model-allowance follow-up deployed on 2026-09-13; authenticated journey smoke pass pending**
+Status: **base and model-allowance follow-up deployed on 2026-09-13; authenticated two-account browser journey passed**
 
 This is a short coordinated cutover because the new browser code, database functions, and Edge Functions depend on one another. All current accounts are owner-controlled test accounts, but the sequence remains fail-closed.
 
@@ -52,6 +52,14 @@ For the model-allowance follow-up, repeat the same preflight and confirm the dry
 - Model-allowance follow-up backup and restore: pass (`20260913-191718`).
 - Follow-up dry run contained only `202609130004_add_model_call_allowances.sql`; migration apply and remote database lint passed.
 - JWT-protected deployments are active: `atlas-chat` v11, `atlas-extract` v6 and `atlas-variant` v3; each rejects unauthenticated requests with HTTP 401.
+- Authenticated browser journey completed at commit `d0683be` on 2026-09-13:
+  - User A Home and Papers loaded, an existing Foundation session restored its durable transcript, and the same transcript survived a full reload.
+  - A backed-up MAT1110 tutorial sheet completed extraction and appeared as a paper-scoped resource with two topics and nine extracted sub-topics.
+  - An expired local refresh token failed explicitly; after re-authentication, retry reused the existing pending paper record and completed without a duplicate upload.
+  - User B signed in as a visibly distinct tenant with its own usage, empty session history, and its own paper library.
+  - User B could not see User A's tutorial sheet and direct navigation to User A's known session ID returned the structured ownership denial: `This session does not belong to the current student.`
+  - Browser diagnostics contained no application errors or exposed credentials/document bodies; only known React Router v7 future-flag warnings were present.
+- Direct storage-prefix mutation probes and allowance-exhaustion replay are intentionally assigned to the non-production authenticated function suite. They are not performed destructively against the live project.
 
 ## Forward-fix and recovery
 

@@ -75,7 +75,7 @@ Do not run the migration merely because the local replay passes. Before deployme
 - `atlas-chat` v10, `atlas-extract` v5 and `atlas-variant` v2: active with JWT verification enabled.
 - Unauthenticated calls to all three functions: denied with HTTP 401.
 - Frontend commit `1ed4796` pushed to `main`; GitHub CI passed and the Vercel production domain returned HTTP 200 from a fresh deployment.
-- Authenticated two-account journey checks remain open because the browser-control connection was unavailable during rollout. Infrastructure checks must not be treated as a substitute for those product checks.
+- Authenticated two-account browser journey checks passed at commit `d0683be`: User A resume/reload and extraction passed; User B could not see User A's paper and received the expected ownership denial for User A's known session ID.
 - Model-allowance follow-up backup and isolated restore rehearsal: pass (`20260913-191718`).
 - Additive migration `202609130004_add_model_call_allowances.sql` applied; remote database lint reports no schema errors.
 - `atlas-chat` v11, `atlas-extract` v6 and `atlas-variant` v3 are active with JWT verification; unauthenticated requests to each return HTTP 401.
@@ -83,4 +83,4 @@ Do not run the migration merely because the local replay passes. Before deployme
 ## Remaining S1 work
 
 - Add authenticated function-level regression tests against a non-production Supabase environment.
-- Execute and record the authenticated two-account current-journey smoke suite.
+- Cover direct cross-tenant storage mutation and allowance-exhaustion replay in that non-production suite; do not use production data for destructive probes.
