@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { URL } from 'node:url'
 
 const readJson = async (path) => JSON.parse(await readFile(new URL(path, import.meta.url), 'utf8'))
+const readText = path => readFile(new URL(path, import.meta.url), 'utf8')
 
 test('critical journey fixtures are complete, unique and synthetic', async () => {
   const dataset = await readJson('../evals/datasets/development/current-system/journeys.json')
@@ -43,4 +44,15 @@ test('every declared current route has a journey or is explicitly non-critical',
   const covered = new Set(dataset.cases.map(item => item.route))
   const critical = ['/auth', '/upload', '/vault', '/patterns', '/simulate', '/simulate/:simulationId', '/engine/:topic']
   for (const route of critical) assert.ok(covered.has(route), `${route} has no baseline journey`)
+})
+
+test('restore rehearsal recreates Supabase policy roles before post-data', async () => {
+  const script = await readText('../scripts/s0-backup-restore-rehearsal.ps1')
+  for (const role of ['anon', 'authenticated', 'service_role']) {
+    assert.match(script, new RegExp(`CREATE ROLE ${role}\\b`, 'i'))
+  }
+  assert.ok(
+    script.indexOf('CREATE ROLE authenticated') < script.indexOf("foreach ($section in @('pre-data', 'data'))"),
+    'Supabase roles must exist before policy restoration'
+  )
 })
