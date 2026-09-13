@@ -1,6 +1,6 @@
 # S1 — Reproducible Database, Security and Prototype Stabilization
 
-Status: **production base deployed; model-allowance rollout and authenticated journey smoke pass pending**
+Status: **production infrastructure deployed; authenticated journey smoke pass pending**
 
 In plain language: this stage makes today’s Atlas safer and repeatable before its larger architecture changes. It is not the new tutoring design.
 
@@ -76,9 +76,11 @@ Do not run the migration merely because the local replay passes. Before deployme
 - Unauthenticated calls to all three functions: denied with HTTP 401.
 - Frontend commit `1ed4796` pushed to `main`; GitHub CI passed and the Vercel production domain returned HTTP 200 from a fresh deployment.
 - Authenticated two-account journey checks remain open because the browser-control connection was unavailable during rollout. Infrastructure checks must not be treated as a substitute for those product checks.
+- Model-allowance follow-up backup and isolated restore rehearsal: pass (`20260913-191718`).
+- Additive migration `202609130004_add_model_call_allowances.sql` applied; remote database lint reports no schema errors.
+- `atlas-chat` v11, `atlas-extract` v6 and `atlas-variant` v3 are active with JWT verification; unauthenticated requests to each return HTTP 401.
 
 ## Remaining S1 work
 
 - Add authenticated function-level regression tests against a non-production Supabase environment.
 - Execute and record the authenticated two-account current-journey smoke suite.
-- Deploy and verify the model-allowance migration and updated functions through the coordinated rollout procedure.

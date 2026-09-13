@@ -1,6 +1,6 @@
 # S1 Production Rollout
 
-Status: **base deployed on 2026-09-13; model-allowance follow-up and authenticated journey smoke pass pending**
+Status: **base and model-allowance follow-up deployed on 2026-09-13; authenticated journey smoke pass pending**
 
 This is a short coordinated cutover because the new browser code, database functions, and Edge Functions depend on one another. All current accounts are owner-controlled test accounts, but the sequence remains fail-closed.
 
@@ -49,6 +49,9 @@ For the model-allowance follow-up, repeat the same preflight and confirm the dry
 - GitHub CI for `1ed4796`: pass.
 - Vercel production endpoint: HTTP 200 with a fresh deployment timestamp.
 - The signed-in User A/User B journey checks above are still required. Browser control was unavailable during the rollout, so no authenticated result is inferred from the infrastructure checks.
+- Model-allowance follow-up backup and restore: pass (`20260913-191718`).
+- Follow-up dry run contained only `202609130004_add_model_call_allowances.sql`; migration apply and remote database lint passed.
+- JWT-protected deployments are active: `atlas-chat` v11, `atlas-extract` v6 and `atlas-variant` v3; each rejects unauthenticated requests with HTTP 401.
 
 ## Forward-fix and recovery
 
