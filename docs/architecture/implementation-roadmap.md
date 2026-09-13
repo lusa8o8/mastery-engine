@@ -77,6 +77,20 @@ Initial deployment recommendation:
 - Postgres-backed jobs/outbox initially; add a separate queue only after measured throughput or latency requires it.
 - Vercel: React frontend until a concrete reason to move it appears.
 
+### Authentication decision — Google through Supabase Auth
+
+Supabase Auth remains Atlas's sole user-identity issuer. Add Google as a Supabase social-login provider before S2A principal contracts freeze; retain email/password as a fallback during rollout. Do not introduce Firebase Auth merely to obtain Google sign-in: Atlas already derives database, Storage, Edge Function, and future Python API authorization from Supabase JWTs and `auth.uid()`, so a second identity issuer would add token bridging, custom-claim, account-mapping, migration, and RLS paths without improving the student-facing flow.
+
+Implementation and configuration requirements:
+
+- Use the existing Supabase client and `signInWithOAuth({ provider: 'google' })`; the resulting application session remains a Supabase session regardless of whether the student used Google or a password.
+- Configure one Google web OAuth client, the Supabase project callback URL, and exact allowlisted local, preview, and production return URLs. Never place the Google client secret in Vite or other browser-visible environment variables.
+- Request only `openid`, email, and profile scopes. Atlas does not need Google Drive, Contacts, offline access, or stored Google provider tokens for authentication.
+- Preserve a validated relative return path so sign-in can resume the intended Atlas route; reject external/open redirects and fall back to the authenticated landing surface.
+- Rely on verified-email automatic identity linking only after collision tests confirm that an existing password account and the same Google email retain one Supabase user ID and all existing resources, sessions, entitlements, and history. Ambiguous or different-email linking requires an authenticated, explicit account-linking flow and is deferred from the first release.
+- Put the button and provider enablement behind an authentication feature flag or equivalent kill switch. A Google outage or OAuth error leaves password sign-in available and produces an actionable error without creating a partial application profile.
+- Firebase Auth remains deferred. Reconsider it only if a documented future platform requirement cannot be met by Supabase Auth and after a separate identity migration, RLS, Storage, token-validation, account-linking, rollback, and tenant-isolation review.
+
 ## 4. Dependency Model
 
 Dependencies have three meanings and must not be collapsed into one project arrow:
@@ -210,6 +224,8 @@ Freeze shared language in dependency-sized packs. Contract-first remains the mai
 ### S2A — Common platform contracts
 
 - Authenticated principal, tenant scope, commands, typed errors, idempotency, workflow jobs/steps, model calls, outbox events, and audit events.
+- Principal identity is the stable Supabase user ID. Authentication method (`password`, `google`, or a later provider) is audit metadata, never a tenant key, ownership key, role, or authorization decision.
+- Auth callback and return-path contracts allow only configured Atlas origins and validated relative application paths.
 
 ### S2B — Resource and evidence contracts
 
@@ -267,6 +283,8 @@ Freeze shared language in dependency-sized packs. Contract-first remains the mai
 - No unresolved question remains about which service is allowed to update each state.
 - Fixtures cover normal, empty, partial, invalid, and legacy records.
 - Every pack declares the earlier packs it imports; circular pack dependencies are rejected.
+- Password and Google sign-in resolve to the same principal contract, and a verified same-email link preserves the existing Supabase user ID and all tenant-owned records.
+- Auth callbacks reject unlisted origins and unsafe return paths; provider secrets and provider access tokens never enter browser bundles, application logs, or Atlas model context.
 
 ### Parallelism
 
@@ -282,6 +300,7 @@ Build the trusted execution boundary shared by every intelligent feature.
 
 - FastAPI application with JWT verification, request IDs, typed errors, health/readiness endpoints, and OpenAPI.
 - Service/repository boundary that always receives an authenticated principal rather than a free-form user ID.
+- Verify the same allowlisted Supabase JWT issuer, audience, signature, expiry, and principal contract for both password and Google-authenticated sessions; provider claims do not create a separate authorization path.
 - Postgres-backed durable job runner using row locks (`FOR UPDATE SKIP LOCKED`) and leases.
 - Transactional outbox written in the same transaction as state changes.
 - Idempotency keys on public commands and unique step keys on workflow stages.
@@ -332,6 +351,7 @@ transaction: store result + advance state + enqueue next event
 - Crash/restart tests demonstrate safe recovery at every step boundary.
 - Duplicate commands and repeated worker delivery produce one logical result.
 - Authorization, timeout, retry, cancellation, and cost-limit tests pass.
+- Password and Google-created Supabase sessions pass the same JWT and tenant-isolation suite; authentication provider metadata cannot change authorization.
 - No model output can directly mutate domain tables.
 
 ### Parallelism
@@ -374,6 +394,7 @@ Make quality measurable before prompt and model choices harden. Dataset governan
 - Remediation routing.
 - Contribution consent, personal-data detection, duplicate detection, eligibility, and access authorization.
 - Dependency failure, adversarial input, and tenant isolation.
+- Authentication journeys: new Google user, existing password user with the same verified Google email, cancelled consent, provider error, expired callback, rejected return URL, repeated callback, sign-out, password fallback, and preservation of existing tenant data after identity linking.
 
 ### Provisional critical gates
 
@@ -415,6 +436,7 @@ Decompose monolithic pages without prematurely changing learning behavior.
 - Make the authenticated Atlas conversation shell the proposed primary surface behind a feature flag.
 - Add a discoverable command registry: `/recent`, `/resources`, `/upload`, `/progress`, and `/patterns` remain deterministic UI commands; `/learn`, `/quiz`, `/exam`, `/clarify`, `/next`, and `/variant` dispatch typed workflow commands.
 - Add a grouped `@` entity picker whose resource labels resolve to stable IDs and fresh authorization; defer canonical topic mentions until S7 taxonomy stability passes.
+- Add a standards-compliant `Continue with Google` action to the shared authentication surface, with pending, cancellation, callback-error, safe-return, and password-fallback states. Do not load a second authentication SDK.
 - Render upload progress, recent study spaces, resource management, progress, patterns, and library results as application-owned cards/drawers rather than model prose.
 - Group exam-routed objectives under one Exam Review card per exam attempt; show the active objective, remediation stage, completed/total weak areas, and Continue action without exposing technical session or episode IDs.
 - Keep legacy Home, Upload, and Vault routes until their management and journey responsibilities have verified replacements.
@@ -463,10 +485,11 @@ Implement this as a focused component extraction rather than a simulator rewrite
 - No new frontend feature performs privileged domain writes directly.
 - Explicit UI/navigation commands make zero model calls, and unknown commands fail closed with a discoverable supported-command list.
 - Renaming a resource does not break mention resolution, existing study spaces, or resume links.
+- Google OAuth succeeds on supported desktop/mobile browsers, returns only to an allowlisted Atlas route, preserves an existing linked account's data, and degrades to actionable password sign-in when unavailable or cancelled.
 
 ### Parallelism
 
-Safe after the relevant S2A/S2B/S2C contracts freeze. UI extraction, typed client generation, and desktop layout can proceed in parallel by directory ownership. Do not wire live workflow transitions until S3 endpoints are accepted.
+Safe after the relevant S2A/S2B/S2C contracts freeze. UI extraction, typed client generation, and desktop layout can proceed in parallel by directory ownership. The small Google-authentication UI/configuration slice may begin immediately against the existing Supabase Auth boundary, but its callback, identity-linking, and tenant-preservation tests must pass before S2A freezes. Do not wire other live workflow transitions until S3 endpoints are accepted.
 
 ## S6 — Ingestion and OCR v2
 
@@ -774,14 +797,15 @@ Move each accepted vertical slice from prototype paths to routed workflows witho
 
 ### Suggested cutover order
 
-1. Read-only new API and typed frontend client.
-2. New private resource model and ingestion shadow.
-3. Patterns v2 reads.
-4. New learning sessions for a pilot cohort.
-5. Exam generation pilot.
-6. Marking/remediation pilot.
-7. Contribution pilot at selected institutions.
-8. Remove old Edge Function paths after retention and rollback windows expire.
+1. Google sign-in through Supabase Auth, with password fallback and an authentication kill switch.
+2. Read-only new API and typed frontend client.
+3. New private resource model and ingestion shadow.
+4. Patterns v2 reads.
+5. New learning sessions for a pilot cohort.
+6. Exam generation pilot.
+7. Marking/remediation pilot.
+8. Contribution pilot at selected institutions.
+9. Remove old Edge Function paths after retention and rollback windows expire.
 
 Each numbered item has its own build, shadow, cohort, release, rollback, and retirement decision. A later item cannot delay an earlier item that independently passes its release gate.
 
@@ -815,7 +839,9 @@ S2D and S2E may be designed in parallel when ownership is available, but they do
 | Frontend | S5 feature extraction and mock clients | Own `src/features` and generated client boundaries |
 | Migration/Rollout | Legacy readers, fixtures, reconciliation and S13 controls | Read-only against production until a per-workflow cutover is approved; own migration tooling |
 
-Integration gate: one authenticated command must travel UI -> API -> durable job -> worker -> validated result -> UI using a non-model fixture.
+Authentication gate: both password and Google sign-in produce the same stable Supabase principal and tenant access, safe callback/return behavior, working sign-out, and password fallback. A linked existing account retains its resources, sessions, entitlements, and history.
+
+Integration gate: one authenticated command must travel UI -> API -> durable job -> worker -> validated result -> UI using a non-model fixture under both password and Google-authenticated Supabase sessions.
 
 ## Wave B — Resource and Learning Core
 
@@ -982,7 +1008,7 @@ A segment is not done when code exists. It is done when:
 
 Includes Pre-S0, S0, S1, and frozen S2A/S2B/S2C packs. Later S2D/S2E packs proceed when their consumers approach implementation and do not block this milestone.
 
-Outcome: the existing product still works, schema/security/session defects are controlled, and the replacement contracts required by the first vertical slice are frozen.
+Outcome: the existing product still works, schema/security/session defects are controlled, Google and password sign-in share one verified Supabase principal boundary, and the replacement contracts required by the first vertical slice are frozen.
 
 ### Milestone 2 — Resource-to-Learning Vertical Slice
 
