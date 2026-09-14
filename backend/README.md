@@ -17,6 +17,10 @@ wired to the building.
   error envelope without reflecting submitted values or exception text.
 - The fixture authenticator must be injected by tests and is rejected when the
   runtime mode is `production`.
+- `atlas_api/jobs.py` defines tenant-scoped command idempotency, explicit job
+  transitions, bounded attempts, leased claims, stale-worker rejection,
+  cooperative cancellation, and review routing. Its in-memory repository is a
+  fixture adapter, not an application runtime option.
 
 ## Local locked process
 
@@ -32,7 +36,7 @@ explicit principal fixtures.
 
 - Supabase JWT verification with pinned issuer/audience/algorithm and bounded
   JWKS refresh behavior.
-- Postgres repositories, idempotency transactions, durable jobs and outbox.
+- Postgres repositories, durable job storage and transactional outbox.
 - Model gateway, usage/cost limits and provider timeout classification.
 - Structured redacted telemetry and audit persistence.
 - S3 crash, retry, cancellation, authorization and tenant-isolation gates.

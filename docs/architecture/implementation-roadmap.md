@@ -319,11 +319,14 @@ Entity modelling can be divided by pack, but one contract owner integrates namin
 ## S3 — Backend Platform and Boring Workflow Runtime
 
 Implementation checkpoint (14 September 2026): `backend/atlas_api/` provides a
-fixture-tested FastAPI shell that imports the frozen S2A contracts. It starts in
-locked mode, reports liveness separately from dependency readiness, rejects all
-protected access without an injected authenticator, emits typed content-safe
-errors, and refuses the fixture authenticator in production mode. This is a
-build milestone only: it has no Supabase, Postgres, worker or model connection.
+fixture-tested FastAPI shell and deterministic job-runtime semantics against the
+frozen S2A contracts. The shell starts locked, separates liveness from readiness,
+rejects protected access without injected authentication, emits typed
+content-safe errors, and forbids fixture authentication in production. The job
+runtime now proves tenant-scoped idempotency, explicit transitions, leases,
+bounded attempts, stale-worker rejection, cancellation and retry scheduling in
+memory. This is still a build milestone only: it has no Supabase, Postgres,
+durable worker, outbox or model connection.
 
 ### Purpose
 
