@@ -10,6 +10,21 @@ The governing rule is:
 
 > Models interpret, teach, assess, or generate. Deterministic code authenticates, authorizes, routes, validates, persists, retries, budgets, and decides whether state may advance.
 
+### Current programme status — 14 September 2026
+
+| Segment | Status | Plain-language meaning |
+|---|---|---|
+| Pre-S0 | Complete | The target architecture, boundaries, budgets, and delivery rules are documented and the machine-readable manifest validates. |
+| S0 | Complete | The original application, risks, deployment, data, and recovery position have been captured and rehearsed. |
+| S1 production stabilization | Complete | Rebuildable schema, tenant policies, verified server identity, server-owned quotas/model allowances, durable tutor resume, retry-safe extraction, Google OAuth, CI, and production rollout are in place. |
+| S1 authenticated browser gate | Complete | Two distinct test tenants passed the current-journey checks: User A resume/extraction worked and User B could neither see User A's paper nor open User A's session. |
+| S1 non-production function suite | Remaining | Direct storage-prefix mutation, cross-tenant CRUD, function attribution, and allowance-exhaustion tests still need an isolated Supabase test environment. |
+| S2A contract drafting | Ready now | Define the shared identity, command, error, idempotency, job, model-call, outbox, and audit contracts. |
+| S4A extraction baseline | Ready in parallel | Turn reviewed tutorial sheets and papers into versioned development and held-out OCR/extraction cases without changing production behavior. |
+| S3 live platform integration | Blocked by gates | Do not connect the new Python API/worker to live state until the S1 non-production suite passes and the required S2A contracts are frozen. |
+
+Recent implementation evidence is maintained in [`s1/README.md`](s1/README.md) and [`s1/production-rollout.md`](s1/production-rollout.md). The successful legacy extraction smoke run establishes current behavior only; it is not evidence that the future OCR/layout pipeline meets S6 quality gates.
+
 ## 2. Delivery Principles
 
 1. Preserve the working mobile experience while replacing its internals behind feature flags.
@@ -124,6 +139,8 @@ it does not wait for S12.
 ```
 
 The diagram shows product-data ordering. The tables in the delivery waves are authoritative for build, live-integration, and release permission. Several segments can build against frozen fixtures before upstream live integration is available.
+
+Current transition rule: S1 is sufficiently stabilized for S2A drafting and S4A baseline capture to proceed in parallel. Final acceptance of the S2A principal/security contracts, and all S3 live integration, remain gated on the isolated authenticated function suite. This keeps useful contract and dataset work moving without treating an unrun security test as passed.
 
 ### Dependency ledger
 

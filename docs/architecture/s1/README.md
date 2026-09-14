@@ -1,6 +1,6 @@
 # S1 — Reproducible Database, Security and Prototype Stabilization
 
-Status: **production infrastructure deployed; authenticated journey smoke pass pending**
+Status: **production infrastructure deployed; authenticated two-account browser journey passed; non-production function suite pending**
 
 In plain language: this stage makes today’s Atlas safer and repeatable before its larger architecture changes. It is not the new tutoring design.
 
