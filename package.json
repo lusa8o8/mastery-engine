@@ -11,7 +11,7 @@
     "test:s1": "node --test tests/s1-security-controls.test.mjs",
     "test:s1:production-probe": "node scripts/s1-production-isolation-probe.mjs",
     "test:s2a": "python tests/s2a_contracts_test.py && node --test tests/s2a-contracts.test.mjs",
-    "test:s3": "python tests/s3_api_shell_test.py && python tests/s3_supabase_jwt_test.py && python tests/s3_command_api_test.py && python tests/s3_job_runtime_test.py && python tests/s3_runtime_loops_test.py && node --test tests/s3-postgres-controls.test.mjs",
+    "test:s3": "python tests/s3_api_shell_test.py && python tests/s3_supabase_jwt_test.py && python tests/s3_command_api_test.py && python tests/s3_job_runtime_test.py && python tests/s3_runtime_loops_test.py && node --test tests/s3-postgres-controls.test.mjs tests/s3-google-command-probe.test.mjs",
     "test:s3:command-probe": "python scripts/s3-command-api-probe.py --confirm-project-ref jipewywqflgandjcqbjl",
     "test:s4a": "python scripts/validate-extraction-dataset.py",
     "test:oauth": "node --test tests/oauth-auth.test.mjs",

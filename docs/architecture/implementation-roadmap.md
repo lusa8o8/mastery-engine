@@ -343,11 +343,15 @@ injected durable service. This is still a build milestone: live command wiring,
 a continuously deployed worker/publisher process, and model connections are not
 enabled. A self-cleaning live probe has passed the password JWT path, anonymous
 denial, durable submission/replay/conflict behavior, two-tenant separation and
-cascading cleanup. Google-session parity remains the browser-assisted half of
-this gate. Sanitized evidence is recorded in
+cascading cleanup. The browser-assisted Google-session parity probe has also
+passed the same principal boundary and durable submission/replay/conflict
+contract without rendering or logging its session token; its exact temporary
+rows were removed and verified absent. Sanitized evidence is recorded in
 [`s3/evidence/20260914T134412Z-postgres-runtime-probe.json`](s3/evidence/20260914T134412Z-postgres-runtime-probe.json)
 and
-[`s3/evidence/20260914T143721Z-command-api-probe.json`](s3/evidence/20260914T143721Z-command-api-probe.json).
+[`s3/evidence/20260914T143721Z-command-api-probe.json`](s3/evidence/20260914T143721Z-command-api-probe.json),
+with Google-session parity recorded in
+[`s3/evidence/20260914T160656Z-google-command-probe.json`](s3/evidence/20260914T160656Z-google-command-probe.json).
 
 ### Purpose
 

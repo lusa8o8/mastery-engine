@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../api/supabase'
 import { getUserTokens } from '../utils/logTokens'
 
 const THEMES = ['paper', 'white', 'dark', 'forest']
+const S3GoogleCommandProbe = import.meta.env.DEV
+  ? lazy(() => import('../components/dev/S3GoogleCommandProbe'))
+  : null
 
 export default function HomePage() {
   const { user, signOut } = useAuth()
@@ -112,6 +115,12 @@ export default function HomePage() {
       <p className="muted" style={{ marginBottom: '1.5rem', fontSize: '0.95rem' }}>
         Atlas is ready. Upload your papers and work through every question - one sub-topic at a time.
       </p>
+
+      {S3GoogleCommandProbe && (
+        <Suspense fallback={null}>
+          <S3GoogleCommandProbe />
+        </Suspense>
+      )}
 
       <div className="row" style={{ marginBottom: '2.5rem', gap: '0.75rem', flexWrap: 'wrap' }}>
         <button className="primary" onClick={() => navigate('/vault')}>

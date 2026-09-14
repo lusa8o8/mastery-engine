@@ -44,6 +44,10 @@ exist, but production deployment and the model-powered rooms are not wired yet.
   intent returns one job, while reusing the key for different intent returns a
   typed conflict. The route remains locked until a durable service and explicit
   command allowlist are injected.
+- Self-cleaning live probes have passed both password and Google Supabase JWT
+  paths through the same principal contract and durable Postgres command
+  submission, replay and conflict behavior. These probes prove the boundary;
+  they do not turn on product-route command handling.
 
 ## Local locked process
 
@@ -59,9 +63,8 @@ explicit principal fixtures.
 
 - Deployment entrypoints, graceful shutdown and readiness for continuously
   running worker and publisher processes.
-- Production construction of the Postgres command service and a live
-  Google authorization and idempotency browser probe. The isolated password
-  path already passes through real JWT verification and Postgres.
+- Production construction and injection of the Postgres command service for
+  real product routes.
 - Model gateway, usage/cost limits and provider timeout classification.
 - Structured redacted telemetry and audit persistence.
 - S3 crash, retry, cancellation, authorization and tenant-isolation gates.

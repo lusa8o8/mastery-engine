@@ -1,0 +1,21 @@
+{
+  "schema_version": "s3-google-command-probe.v1",
+  "project_ref": "jipewywqflgandjcqbjl",
+  "app_commit": "7d5c01b",
+  "completed_at": "2026-09-14T16:06:56.313391Z",
+  "status": "passed",
+  "authentication_method": "google",
+  "model_provider_calls_expected": 0,
+  "checks": [
+    "existing Google OAuth session returned to the authenticated Atlas home route",
+    "local API verified the Supabase JWT and resolved auth_method google",
+    "principal_id and personal tenant_id matched",
+    "authenticated command created one durable queued job",
+    "same command intent and idempotency key replayed the existing job",
+    "changed intent with the same idempotency key returned a conflict",
+    "session token was neither rendered nor logged by the probe harness",
+    "exact command, job and outbox probe rows were removed and verified absent",
+    "loopback probe API was stopped after cleanup"
+  ],
+  "cleanup_verified": true
+}
