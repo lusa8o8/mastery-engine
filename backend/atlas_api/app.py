@@ -15,6 +15,7 @@ from .auth import (
     Authenticator,
     FixtureAuthenticator,
     LockedAuthenticator,
+    build_production_authenticator,
     parse_bearer_token,
 )
 from .config import RuntimeMode, Settings
@@ -88,7 +89,12 @@ def create_app(
     ):
         raise ValueError("FixtureAuthenticator is forbidden in production mode")
 
-    resolved_authenticator = authenticator or LockedAuthenticator()
+    if authenticator is not None:
+        resolved_authenticator = authenticator
+    elif resolved_settings.runtime_mode == RuntimeMode.PRODUCTION:
+        resolved_authenticator = build_production_authenticator(resolved_settings)
+    else:
+        resolved_authenticator = LockedAuthenticator()
     resolved_readiness = readiness_probe or StaticReadinessProbe()
     docs_url = "/docs" if resolved_settings.docs_enabled else None
     app = FastAPI(

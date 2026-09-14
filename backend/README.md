@@ -1,8 +1,8 @@
 # Atlas backend
 
-This package is the fixture-backed beginning of S3. It is deliberately locked
-by default and has no database, Supabase JWT, model-provider, or production
-connection yet.
+This package is the incremental S3 platform runtime. It is deliberately locked
+by default; production mode enables bounded Supabase JWT verification while
+database and model-provider wiring remain separate release gates.
 
 In plain language: the front door and its safety rules now exist, but it is not
 wired to the building.
@@ -17,6 +17,12 @@ wired to the building.
   error envelope without reflecting submitted values or exception text.
 - The fixture authenticator must be injected by tests and is rejected when the
   runtime mode is `production`.
+- Production authentication accepts only locally verified Supabase ES256 or
+  RS256 user tokens from the configured project. Issuer, audience, role and
+  authentication method are checked before a personal tenant principal exists.
+- Public signing keys are fetched with a five-second default timeout, a 256 KiB
+  response cap and a ten-minute maximum application cache. New key IDs may cause
+  a throttled refresh; unavailable discovery fails closed with a typed `503`.
 - `atlas_api/jobs.py` defines tenant-scoped command idempotency, explicit job
   transitions, bounded attempts, leased claims, stale-worker rejection,
   cooperative cancellation, and review routing. Its in-memory repository is a
@@ -44,8 +50,6 @@ explicit principal fixtures.
 
 ## Still required before live integration
 
-- Supabase JWT verification with pinned issuer/audience/algorithm and bounded
-  JWKS refresh behavior.
 - Deployment entrypoints, graceful shutdown and readiness for continuously
   running worker and publisher processes.
 - Model gateway, usage/cost limits and provider timeout classification.

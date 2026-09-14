@@ -168,6 +168,10 @@ class S3ApiShellTest(unittest.IsolatedAsyncioTestCase):
                 ),
             )
 
+    def test_production_mode_requires_supabase_configuration(self) -> None:
+        with self.assertRaisesRegex(ValueError, "SUPABASE_URL"):
+            create_app(Settings(runtime_mode=RuntimeMode.PRODUCTION))
+
     async def test_validation_and_missing_routes_do_not_reflect_input(self) -> None:
         app = fixture_app()
 

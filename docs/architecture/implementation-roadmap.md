@@ -21,7 +21,7 @@ The governing rule is:
 | S1 production-isolated security probe | Complete | Eleven authenticated, anonymous, database, Storage, function, and allowance checks passed against UUID-namespaced fixtures in the current test-only project; both temporary users, the object, and all probe rows were removed and verified absent. |
 | S2A common contracts | Complete - frozen v1.0.0 | Extraction, interactive tutoring and exam/remediation scenarios passed the common-envelope review. Ownership, lifecycle, deletion, tenant, OAuth, retry and trace rules are fixed for v1. |
 | S4A extraction baseline | In progress | Dataset governance, split checks, planned synthetic cases, and a private PDF candidate registry exist. Reviewed ground truth and an isolated executable held-out set are still required. |
-| S3 platform build | In progress; API shell complete, live integration gated | The locked-by-default FastAPI shell now has request IDs, typed errors, health/readiness and injected fixture authentication. JWT, Postgres, jobs, outbox, model gateway and observability remain gated work. |
+| S3 platform build | In progress; platform runtime and JWT boundary built | The locked-by-default FastAPI shell, deterministic job runtime, durable Postgres jobs/outbox, bounded worker/publisher loops, and production Supabase JWT verifier are implemented. Authenticated command endpoints, model gateway, deployment lifecycle, and observability remain gated work. |
 
 Recent implementation evidence is maintained in [`s1/README.md`](s1/README.md) and [`s1/production-rollout.md`](s1/production-rollout.md). The successful legacy extraction smoke run establishes current behavior only; it is not evidence that the future OCR/layout pipeline meets S6 quality gates.
 
@@ -331,9 +331,14 @@ live probe passes. PostgreSQL owns durable time calculations so worker clock
 skew cannot invalidate retry schedules. Bounded worker and publisher batches now
 use allowlisted version routes, independent postcondition checks, hard handler
 timeouts, lease safety margins, classified retry and explicit dead-letter state.
-Fixture handlers have passed against the live durable repositories. This is
-still a build milestone: no continuously deployed worker/publisher process, JWT
-verifier or model connection is enabled. Sanitized evidence is recorded in
+Fixture handlers have passed against the live durable repositories. Production
+authentication now verifies asymmetric Supabase user tokens locally against a
+pinned issuer, audience, role and algorithm, maps password and Google sessions
+to the same personal-tenant boundary, and bounds discovery timeout, payload,
+cache and unknown-key refresh behavior. The linked project advertises ES256.
+This remains a build milestone: no authenticated command endpoint, continuously
+deployed worker/publisher process, or model connection is enabled. Sanitized
+evidence is recorded in
 [`s3/evidence/20260914T134412Z-postgres-runtime-probe.json`](s3/evidence/20260914T134412Z-postgres-runtime-probe.json).
 
 ### Purpose
