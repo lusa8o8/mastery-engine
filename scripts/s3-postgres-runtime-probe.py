@@ -18,6 +18,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import psycopg
+from pydantic import BaseModel, ConfigDict
 from psycopg.types.json import Jsonb
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,6 +49,12 @@ from contracts.s2a.models import CommandEnvelope, ErrorCode
 
 
 EVIDENCE_DIR = ROOT / "docs" / "architecture" / "s3" / "evidence"
+
+
+class ProbeWorkflowResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: UUID
 
 
 def load_env(path: Path) -> None:
@@ -164,7 +171,7 @@ def write_report(project_ref: str, checks: list[str], cleanup_verified: bool) ->
     except (OSError, subprocess.SubprocessError):
         commit = "unknown"
     report = {
-        "schema_version": "s3-runtime-probe.v2",
+        "schema_version": "s3-runtime-probe.v3",
         "project_ref": project_ref,
         "app_commit": commit,
         "completed_at": datetime.now(timezone.utc).isoformat(),
@@ -290,15 +297,19 @@ def main() -> None:
             assert stopped.status.value == "cancelled"
             checks.append("running cancellation stopped at the lease boundary")
 
-            for token in (None, token_a):
-                headers = api_headers(anon_key, token)
-                response = client.get(
-                    f"{url}/rest/v1/workflow_jobs?select=job_id", headers=headers
-                )
-                assert response.status_code in {401, 403}
-            checks.append("anonymous and authenticated browsers were denied")
+            for table in ("workflow_jobs", "workflow_results"):
+                for token in (None, token_a):
+                    headers = api_headers(anon_key, token)
+                    response = client.get(
+                        f"{url}/rest/v1/{table}?select=job_id", headers=headers
+                    )
+                    assert response.status_code in {401, 403}
+            checks.append(
+                "anonymous and authenticated browsers were denied job and result tables"
+            )
 
-            outbox = PostgresOutboxRepository(connect)
+            # A shared-project probe must never claim another tenant's events.
+            outbox = PostgresOutboxRepository(connect, claim_tenant_id=user_a)
             published = 0
             first_outbox_lease = outbox.claim_next()
             assert first_outbox_lease is not None
@@ -315,7 +326,9 @@ def main() -> None:
             )
             assert failed_delivery.last_error_code == ErrorCode.DEPENDENCY_FAILED
             checks.append("failed delivery was safely scheduled for retry")
-            deadline = monotonic() + 15
+            # The hosted test database can pause briefly between pooler
+            # transactions. Keep the count exact while allowing bounded slack.
+            deadline = monotonic() + 45
             while published < 4 and monotonic() < deadline:
                 outbox_lease = outbox.claim_next()
                 if outbox_lease is None:
@@ -349,6 +362,8 @@ def main() -> None:
                             execute_fixture,
                             verify_fixture,
                             timeout_seconds=5,
+                            result_model=ProbeWorkflowResult,
+                            result_schema_version="platform_probe_result.v1",
                         )
                     ]
                 ),
@@ -356,7 +371,16 @@ def main() -> None:
             )
             worker_trace = asyncio.run(workflow_worker.run_once())
             assert worker_trace is not None and worker_trace.status == "succeeded"
-            checks.append("durable worker executed and verified an allowlisted workflow")
+            stored_result = durable_runtime.get_result(
+                user_a, loop_submission.job.job_id
+            )
+            assert stored_result is not None
+            assert stored_result.output == {
+                "command_id": str(loop_submission.job.command_id)
+            }
+            checks.append(
+                "durable worker atomically stored a validated allowlisted result"
+            )
 
             unknown_event_id = uuid4()
             with connect() as connection:

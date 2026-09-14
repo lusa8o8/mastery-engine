@@ -31,6 +31,19 @@ test('Postgres runtime uses database time, row locks, and atomic outbox writes',
   assert.match(jobs, /never command payload/i)
 })
 
+test('validated workflow results are private and share the completion transaction', async () => {
+  const sql = await read('supabase/migrations/202609140003_create_workflow_results.sql')
+  const jobs = await read('backend/atlas_api/postgres_jobs.py')
+  assert.match(sql, /create table if not exists public\.workflow_results/i)
+  assert.match(sql, /foreign key \(job_id, tenant_id\)/i)
+  assert.match(sql, /enable row level security/i)
+  assert.match(sql, /revoke all on public\.workflow_results from public, anon, authenticated/i)
+  assert.match(jobs, /insert into public\.workflow_results/i)
+  assert.match(jobs, /stored\.status == JobStatus\.SUCCEEDED/i)
+  assert.match(jobs, /job_id = %s for share/i)
+  assert.match(jobs, /database_now,/i)
+})
+
 test('outbox delivery is leased and explicitly at-least-once', async () => {
   const sql = await read('supabase/migrations/202609140001_create_platform_workflow_runtime.sql')
   const deadLetterSql = await read('supabase/migrations/202609140002_add_outbox_dead_letter_state.sql')
@@ -38,6 +51,8 @@ test('outbox delivery is leased and explicitly at-least-once', async () => {
   assert.match(sql, /publish_lease_token uuid/i)
   assert.match(sql, /publish_attempt_count between 0 and 20/i)
   assert.match(outbox, /for update skip locked/i)
+  assert.match(outbox, /claim_tenant_id/i)
+  assert.match(outbox, /and tenant_id = %s/i)
   assert.match(outbox, /publish_attempt_count = event\.publish_attempt_count \+ 1/i)
   assert.match(outbox, /Consumers must deduplicate by event_id/i)
   assert.match(outbox, /publish_lease_token = %s/i)

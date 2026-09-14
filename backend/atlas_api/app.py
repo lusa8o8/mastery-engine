@@ -34,6 +34,11 @@ from .errors import (
     unexpected_error_handler,
     validation_error_handler,
 )
+from .job_queries import (
+    JobQueryService,
+    JobSnapshot,
+    LockedJobQueryService,
+)
 
 
 class StrictResponse(BaseModel):
@@ -87,6 +92,7 @@ def create_app(
     authenticator: Authenticator | None = None,
     readiness_probe: ReadinessProbe | None = None,
     command_service: CommandService | None = None,
+    job_query_service: JobQueryService | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_environment()
     if resolved_settings.runtime_mode == RuntimeMode.FIXTURE and authenticator is None:
@@ -105,6 +111,7 @@ def create_app(
         resolved_authenticator = LockedAuthenticator()
     resolved_readiness = readiness_probe or StaticReadinessProbe()
     resolved_command_service = command_service or LockedCommandService()
+    resolved_job_query_service = job_query_service or LockedJobQueryService()
     docs_url = "/docs" if resolved_settings.docs_enabled else None
     app = FastAPI(
         title="Atlas API",
@@ -116,6 +123,7 @@ def create_app(
     app.state.authenticator = resolved_authenticator
     app.state.readiness_probe = resolved_readiness
     app.state.command_service = resolved_command_service
+    app.state.job_query_service = resolved_job_query_service
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
@@ -164,6 +172,8 @@ def create_app(
         if isinstance(app.state.command_service, LockedCommandService):
             # Readiness covers the public write path as well as process health.
             checks["job_store"] = False
+        if isinstance(app.state.job_query_service, LockedJobQueryService):
+            checks["job_store"] = False
         if not checks or not all(checks.values()):
             raise AtlasError(
                 code=ErrorCode.DEPENDENCY_FAILED,
@@ -208,6 +218,22 @@ def create_app(
             request_id_for(request),
             idempotency_key,
             body,
+        )
+
+    @app.get(
+        "/v1/jobs/{job_id}",
+        response_model=JobSnapshot,
+        responses=ERROR_RESPONSES,
+    )
+    async def get_job(
+        request: Request,
+        job_id: UUID,
+        principal: Annotated[Principal, Depends(current_principal)],
+    ) -> JobSnapshot:
+        return await run_in_threadpool(
+            request.app.state.job_query_service.get,
+            principal,
+            job_id,
         )
 
     return app

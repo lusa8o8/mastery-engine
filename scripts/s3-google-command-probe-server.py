@@ -26,6 +26,7 @@ from backend.atlas_api.commands import (  # noqa: E402
 )
 from backend.atlas_api.config import RuntimeMode, Settings  # noqa: E402
 from backend.atlas_api.jobs import JobRuntime  # noqa: E402
+from backend.atlas_api.job_queries import RegisteredJobQueryService  # noqa: E402
 from backend.atlas_api.postgres_jobs import PostgresJobRepository  # noqa: E402
 
 
@@ -113,6 +114,7 @@ def build_app(project_ref: str):
     app = create_app(
         Settings(runtime_mode=RuntimeMode.PRODUCTION, supabase_url=url),
         command_service=service,
+        job_query_service=RegisteredJobQueryService(runtime),
     )
     app.add_middleware(
         CORSMiddleware,

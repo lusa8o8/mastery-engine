@@ -13,8 +13,10 @@ from enum import Enum
 import hashlib
 import json
 from threading import RLock
-from typing import Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID, uuid4
+
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator
 
 from contracts.s2a.models import CommandEnvelope, JobStatus, WorkflowJob
 
@@ -43,6 +45,29 @@ class JobOutcome(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     REVIEW_REQUIRED = "review_required"
+
+
+class WorkflowResult(BaseModel):
+    """A validated, tenant-owned output stored only by the trusted worker."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["workflow_result.v1"]
+    job_id: UUID
+    tenant_id: UUID
+    output_schema_version: str = Field(
+        pattern=r"^[a-z][a-z0-9_.-]+\.v[1-9][0-9]*$"
+    )
+    output: dict[str, Any]
+    created_at: AwareDatetime
+
+    @field_validator("output")
+    @classmethod
+    def output_is_bounded(cls, value: dict[str, Any]) -> dict[str, Any]:
+        encoded = json.dumps(value, separators=(",", ":"), ensure_ascii=True)
+        if len(encoded.encode("utf-8")) > 64 * 1024:
+            raise ValueError("workflow result exceeds 64 KiB")
+        return value
 
 
 ALLOWED_TRANSITIONS: dict[JobStatus, frozenset[JobStatus]] = {
@@ -92,6 +117,14 @@ class JobRepository(Protocol):
 
     def get(self, tenant_id: UUID, job_id: UUID) -> WorkflowJob: ...
 
+    def get_result(
+        self, tenant_id: UUID, job_id: UUID
+    ) -> WorkflowResult | None: ...
+
+    def get_snapshot(
+        self, tenant_id: UUID, job_id: UUID
+    ) -> tuple[WorkflowJob, WorkflowResult | None]: ...
+
     def get_command(
         self, tenant_id: UUID, command_id: UUID
     ) -> CommandEnvelope: ...
@@ -113,6 +146,7 @@ class JobRepository(Protocol):
         outcome: JobOutcome,
         now: datetime,
         retry_delay: timedelta | None = None,
+        result: WorkflowResult | None = None,
     ) -> WorkflowJob: ...
 
 
@@ -157,6 +191,7 @@ class InMemoryJobRepository:
         self._lock = RLock()
         self._jobs: dict[UUID, WorkflowJob] = {}
         self._commands: dict[UUID, CommandEnvelope] = {}
+        self._results: dict[UUID, WorkflowResult] = {}
         self._idempotency: dict[tuple[UUID, str], tuple[str, UUID]] = {}
 
     @staticmethod
@@ -212,6 +247,23 @@ class InMemoryJobRepository:
             if job is None or job.tenant_id != tenant_id:
                 raise JobNotFound("job not found")
             return self._copy(job)
+
+    def get_result(self, tenant_id: UUID, job_id: UUID) -> WorkflowResult | None:
+        with self._lock:
+            self.get(tenant_id, job_id)
+            result = self._results.get(job_id)
+            return result.model_copy(deep=True) if result is not None else None
+
+    def get_snapshot(
+        self, tenant_id: UUID, job_id: UUID
+    ) -> tuple[WorkflowJob, WorkflowResult | None]:
+        with self._lock:
+            job = self.get(tenant_id, job_id)
+            result = self._results.get(job_id)
+            return (
+                job,
+                result.model_copy(deep=True) if result is not None else None,
+            )
 
     def get_command(
         self, tenant_id: UUID, command_id: UUID
@@ -312,6 +364,7 @@ class InMemoryJobRepository:
         outcome: JobOutcome,
         now: datetime,
         retry_delay: timedelta | None = None,
+        result: WorkflowResult | None = None,
     ) -> WorkflowJob:
         with self._lock:
             job = self.get(tenant_id, job_id)
@@ -362,7 +415,12 @@ class InMemoryJobRepository:
                     completed_at=completed_at,
                     updated_at=now,
                 )
+            if updated.status == JobStatus.SUCCEEDED and result is not None:
+                if result.job_id != job_id or result.tenant_id != tenant_id:
+                    raise InvalidJobTransition("workflow result scope does not match job")
             self._jobs[job_id] = updated
+            if updated.status == JobStatus.SUCCEEDED and result is not None:
+                self._results[job_id] = result.model_copy(deep=True)
             return self._copy(updated)
 
 
@@ -408,6 +466,14 @@ class JobRuntime:
     def get(self, tenant_id: UUID, job_id: UUID) -> WorkflowJob:
         return self._repository.get(tenant_id, job_id)
 
+    def get_result(self, tenant_id: UUID, job_id: UUID) -> WorkflowResult | None:
+        return self._repository.get_result(tenant_id, job_id)
+
+    def get_snapshot(
+        self, tenant_id: UUID, job_id: UUID
+    ) -> tuple[WorkflowJob, WorkflowResult | None]:
+        return self._repository.get_snapshot(tenant_id, job_id)
+
     def command_for(self, lease: JobLease) -> CommandEnvelope:
         return self._repository.get_command(
             lease.job.tenant_id, lease.job.command_id
@@ -429,6 +495,7 @@ class JobRuntime:
         outcome: JobOutcome,
         *,
         retry_delay: timedelta | None = None,
+        result: WorkflowResult | None = None,
     ) -> WorkflowJob:
         return self._repository.finish(
             lease.job.tenant_id,
@@ -437,4 +504,5 @@ class JobRuntime:
             outcome=outcome,
             now=self._clock(),
             retry_delay=retry_delay,
+            result=result,
         )

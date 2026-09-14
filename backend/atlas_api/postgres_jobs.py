@@ -22,6 +22,7 @@ from .jobs import (
     JobRuntimeError,
     LeaseLost,
     SubmissionResult,
+    WorkflowResult,
     _intent_fingerprint,
     _transition,
     _validated_copy,
@@ -266,6 +267,41 @@ class PostgresJobRepository:
             with connection.cursor(row_factory=dict_row) as cursor:
                 return self._select_job(cursor, tenant_id, job_id)
 
+    def get_result(self, tenant_id: UUID, job_id: UUID) -> WorkflowResult | None:
+        return self.get_snapshot(tenant_id, job_id)[1]
+
+    def get_snapshot(
+        self, tenant_id: UUID, job_id: UUID
+    ) -> tuple[WorkflowJob, WorkflowResult | None]:
+        with self._connection_factory() as connection:
+            with connection.cursor(row_factory=dict_row) as cursor:
+                # The shared row lock makes job and result one consistent read:
+                # completion cannot commit between these two statements.
+                cursor.execute(
+                    f"select {JOB_COLUMNS} from public.workflow_jobs "
+                    "where tenant_id = %s and job_id = %s for share",
+                    (tenant_id, job_id),
+                )
+                job_row = cursor.fetchone()
+                if job_row is None:
+                    raise JobNotFound("job not found")
+                job = self._job(job_row)
+                cursor.execute(
+                    """
+                    select job_id, tenant_id, output_schema_version, output,
+                           created_at
+                    from public.workflow_results
+                    where tenant_id = %s and job_id = %s
+                    """,
+                    (tenant_id, job_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    return job, None
+                return job, WorkflowResult.model_validate(
+                    {"schema_version": "workflow_result.v1", **row}
+                )
+
     def get_command(
         self, tenant_id: UUID, command_id: UUID
     ) -> CommandEnvelope:
@@ -409,6 +445,7 @@ class PostgresJobRepository:
         outcome: JobOutcome,
         now: datetime,
         retry_delay: timedelta | None = None,
+        result: WorkflowResult | None = None,
     ) -> WorkflowJob:
         del now
         with self._connection_factory() as connection:
@@ -472,6 +509,26 @@ class PostgresJobRepository:
                     )
                     event_type = f"workflow.job_{status.value}"
                 stored = self._store_job(cursor, updated)
+                if stored.status == JobStatus.SUCCEEDED and result is not None:
+                    if result.job_id != job_id or result.tenant_id != tenant_id:
+                        raise InvalidJobTransition(
+                            "workflow result scope does not match job"
+                        )
+                    cursor.execute(
+                        """
+                        insert into public.workflow_results (
+                          job_id, tenant_id, output_schema_version, output,
+                          created_at
+                        ) values (%s, %s, %s, %s, %s)
+                        """,
+                        (
+                            result.job_id,
+                            result.tenant_id,
+                            result.output_schema_version,
+                            Jsonb(result.output),
+                            database_now,
+                        ),
+                    )
                 self._insert_event(
                     cursor,
                     stored,

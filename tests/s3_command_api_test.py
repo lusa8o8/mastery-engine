@@ -28,6 +28,13 @@ from backend.atlas_api.jobs import (  # noqa: E402
     JobNotFound,
     JobRuntime,
 )
+from backend.atlas_api.job_queries import RegisteredJobQueryService  # noqa: E402
+from backend.atlas_api.worker import (  # noqa: E402
+    WorkflowDefinition,
+    WorkflowDisposition,
+    WorkflowRegistry,
+    WorkflowWorker,
+)
 from contracts.s2a.models import AuthMethod, Principal  # noqa: E402
 
 
@@ -41,6 +48,13 @@ class ExtractionFixturePayload(BaseModel):
 
     resource_id: UUID
     requested_pages: list[int] = Field(min_length=1, max_length=20)
+
+
+class ExtractionFixtureResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    resource_id: UUID
+    accepted_page_count: int = Field(ge=1, le=20)
 
 
 def principal(user_id: UUID) -> Principal:
@@ -104,7 +118,9 @@ def command_app(*, runtime_override=None):
             {"user-a": principal(USER_A), "user-b": principal(USER_B)}
         ),
         command_service=service,
+        job_query_service=RegisteredJobQueryService(runtime),
     )
+    app.state.test_runtime = runtime
     return app, repository
 
 
@@ -112,6 +128,15 @@ async def request(app, **kwargs) -> httpx.Response:
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     async with httpx.AsyncClient(transport=transport, base_url="http://atlas.test") as client:
         return await client.post("/v1/commands", **kwargs)
+
+
+async def get_job(app, job_id: str, token: str) -> httpx.Response:
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="http://atlas.test") as client:
+        return await client.get(
+            f"/v1/jobs/{job_id}",
+            headers={"authorization": f"Bearer {token}"},
+        )
 
 
 def headers(token: str, key: str = "extract:attempt-1") -> dict[str, str]:
@@ -153,6 +178,21 @@ class CommandApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stored.tenant_id, USER_A)
         self.assertEqual(stored.request_id, UUID(response.headers["x-request-id"]))
 
+        snapshot = await get_job(app, body["job"]["job_id"], "user-a")
+        self.assertEqual(snapshot.status_code, 200)
+        self.assertEqual(snapshot.json()["schema_version"], "job_snapshot.v1")
+        self.assertEqual(snapshot.json()["job"]["tenant_id"], str(USER_A))
+        self.assertIsNone(snapshot.json()["result"])
+
+        foreign = await get_job(app, body["job"]["job_id"], "user-b")
+        missing = await get_job(
+            app, "ffffffff-ffff-4fff-8fff-ffffffffffff", "user-a"
+        )
+        self.assertEqual(foreign.status_code, 404)
+        self.assertEqual(foreign.json()["code"], "NOT_FOUND")
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(missing.json()["code"], "NOT_FOUND")
+
     async def test_same_intent_replays_one_job_and_changed_intent_conflicts(self) -> None:
         app, _repository = command_app()
         first = await request(app, headers=headers("user-a"), json=command_body())
@@ -168,6 +208,59 @@ class CommandApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(replay.json()["replayed"])
         self.assertEqual(changed.status_code, 409)
         self.assertEqual(changed.json()["code"], "CONFLICT")
+
+    async def test_worker_result_is_validated_persisted_and_read_by_owner(self) -> None:
+        app, _repository = command_app()
+        submitted = await request(
+            app, headers=headers("user-a"), json=command_body()
+        )
+
+        async def execute(context):
+            return {
+                "resource_id": context.command.payload["resource_id"],
+                "accepted_page_count": len(
+                    context.command.payload["requested_pages"]
+                ),
+            }
+
+        async def verify(_context, candidate):
+            self.assertEqual(candidate["accepted_page_count"], 2)
+            return WorkflowDisposition.SUCCEEDED
+
+        worker = WorkflowWorker(
+            app.state.test_runtime,
+            WorkflowRegistry(
+                [
+                    WorkflowDefinition(
+                        workflow_name="resource.extraction",
+                        workflow_version="v1",
+                        execute=execute,
+                        verify=verify,
+                        timeout_seconds=1,
+                        result_model=ExtractionFixtureResult,
+                        result_schema_version="resource_extract_result.v1",
+                    )
+                ]
+            ),
+            clock=lambda: NOW,
+        )
+        trace = await worker.run_once()
+        assert trace is not None
+        self.assertEqual(trace.status, "succeeded")
+
+        job_id = submitted.json()["job"]["job_id"]
+        snapshot = await get_job(app, job_id, "user-a")
+        self.assertEqual(snapshot.status_code, 200)
+        self.assertEqual(snapshot.json()["job"]["status"], "succeeded")
+        self.assertEqual(
+            snapshot.json()["result"]["output"],
+            {"resource_id": str(USER_A), "accepted_page_count": 2},
+        )
+        self.assertEqual(
+            snapshot.json()["result"]["output_schema_version"],
+            "resource_extract_result.v1",
+        )
+        self.assertEqual((await get_job(app, job_id, "user-b")).status_code, 404)
 
     async def test_idempotency_namespace_is_per_tenant(self) -> None:
         app, _repository = command_app()

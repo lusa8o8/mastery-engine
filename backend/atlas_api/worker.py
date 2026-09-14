@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from random import SystemRandom
 import re
@@ -12,9 +13,11 @@ from time import perf_counter
 from typing import Any
 from uuid import UUID
 
+from pydantic import BaseModel, ValidationError
+
 from contracts.s2a.models import CommandEnvelope, ErrorCode, WorkflowJob
 
-from .jobs import JobOutcome, JobRuntime, LeaseLost
+from .jobs import JobOutcome, JobRuntime, LeaseLost, WorkflowResult
 from .retry import RetryPolicy
 
 
@@ -54,6 +57,8 @@ class WorkflowDefinition:
     execute: Callable[[WorkflowContext], Awaitable[Any]]
     verify: Callable[[WorkflowContext, Any], Awaitable[WorkflowDisposition]]
     timeout_seconds: float = 240
+    result_model: type[BaseModel] | None = None
+    result_schema_version: str | None = None
 
     def __post_init__(self) -> None:
         if re.fullmatch(r"[a-z][a-z0-9_.-]{2,63}", self.workflow_name) is None:
@@ -62,6 +67,19 @@ class WorkflowDefinition:
             raise ValueError("workflow_version is invalid")
         if self.timeout_seconds <= 0 or self.timeout_seconds > 300:
             raise ValueError("timeout_seconds must be between 0 and 300")
+        if (self.result_model is None) != (self.result_schema_version is None):
+            raise ValueError(
+                "result_model and result_schema_version must be configured together"
+            )
+        if self.result_model is not None and (
+            not isinstance(self.result_model, type)
+            or not issubclass(self.result_model, BaseModel)
+        ):
+            raise ValueError("result_model must be a Pydantic model")
+        if self.result_schema_version is not None and re.fullmatch(
+            r"[a-z][a-z0-9_.-]+\.v[1-9][0-9]*", self.result_schema_version
+        ) is None:
+            raise ValueError("result_schema_version is invalid")
 
 
 class WorkflowRegistry:
@@ -109,11 +127,13 @@ class WorkflowWorker:
         *,
         retry_policy: RetryPolicy = RetryPolicy(),
         jitter: Callable[[], float] = SystemRandom().random,
+        clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
     ) -> None:
         self._runtime = runtime
         self._registry = registry
         self._retry_policy = retry_policy
         self._jitter = jitter
+        self._clock = clock
         if registry.maximum_timeout_seconds + 30 > runtime.lease_duration.total_seconds():
             raise ValueError("workflow timeout must leave 30 seconds of lease margin")
 
@@ -125,6 +145,7 @@ class WorkflowWorker:
         error_code: ErrorCode | None = None
         retry_delay = None
         outcome = JobOutcome.FAILED
+        stored_result: WorkflowResult | None = None
         try:
             command = await asyncio.to_thread(self._runtime.command_for, lease)
             definition = self._registry.resolve(
@@ -135,10 +156,29 @@ class WorkflowWorker:
             context = WorkflowContext(job=lease.job, command=command)
             async with asyncio.timeout(definition.timeout_seconds):
                 candidate = await definition.execute(context)
+                if definition.result_model is not None:
+                    candidate = definition.result_model.model_validate(
+                        candidate
+                    ).model_dump(mode="json")
                 disposition = await definition.verify(context, candidate)
             if not isinstance(disposition, WorkflowDisposition):
                 raise PermanentWorkflowError(ErrorCode.INVALID_INPUT)
             outcome = JobOutcome(disposition.value)
+            if (
+                outcome == JobOutcome.SUCCEEDED
+                and definition.result_schema_version is not None
+            ):
+                stored_result = WorkflowResult(
+                    schema_version="workflow_result.v1",
+                    job_id=lease.job.job_id,
+                    tenant_id=lease.job.tenant_id,
+                    output_schema_version=definition.result_schema_version,
+                    output=candidate,
+                    created_at=self._clock(),
+                )
+        except ValidationError:
+            # Invalid handler output is permanent and never persisted.
+            error_code = ErrorCode.INVALID_INPUT
         except ReviewRequiredError:
             outcome = JobOutcome.REVIEW_REQUIRED
             error_code = ErrorCode.INVALID_INPUT
@@ -164,6 +204,7 @@ class WorkflowWorker:
                 lease,
                 outcome,
                 retry_delay=retry_delay,
+                result=stored_result,
             )
             status = finished.status.value
         except LeaseLost:

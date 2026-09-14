@@ -17,6 +17,7 @@ from backend.atlas_api.app import StaticReadinessProbe, create_app  # noqa: E402
 from backend.atlas_api.auth import FixtureAuthenticator  # noqa: E402
 from backend.atlas_api.commands import CommandSubmission  # noqa: E402
 from backend.atlas_api.config import RuntimeMode, Settings  # noqa: E402
+from backend.atlas_api.job_queries import JobSnapshot  # noqa: E402
 from contracts.s2a.models import AuthMethod, Principal  # noqa: E402
 
 
@@ -44,6 +45,10 @@ def fixture_app(*, ready: bool = True):
         def submit(self, *_args, **_kwargs) -> CommandSubmission:
             raise AssertionError("readiness fixture must not submit commands")
 
+    class ReadyJobQueryService:
+        def get(self, *_args, **_kwargs) -> JobSnapshot:
+            raise AssertionError("readiness fixture must not query jobs")
+
     return create_app(
         Settings(runtime_mode=RuntimeMode.FIXTURE, docs_enabled=False),
         authenticator=FixtureAuthenticator(
@@ -54,6 +59,7 @@ def fixture_app(*, ready: bool = True):
         ),
         readiness_probe=StaticReadinessProbe(checks),
         command_service=ReadyCommandService(),
+        job_query_service=ReadyJobQueryService(),
     )
 
 

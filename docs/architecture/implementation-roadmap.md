@@ -21,7 +21,7 @@ The governing rule is:
 | S1 production-isolated security probe | Complete | Eleven authenticated, anonymous, database, Storage, function, and allowance checks passed against UUID-namespaced fixtures in the current test-only project; both temporary users, the object, and all probe rows were removed and verified absent. |
 | S2A common contracts | Complete - frozen v1.0.0 | Extraction, interactive tutoring and exam/remediation scenarios passed the common-envelope review. Ownership, lifecycle, deletion, tenant, OAuth, retry and trace rules are fixed for v1. |
 | S4A extraction baseline | In progress | Dataset governance, split checks, planned synthetic cases, and a private PDF candidate registry exist. Reviewed ground truth and an isolated executable held-out set are still required. |
-| S3 platform build | In progress; authenticated command boundary built | The locked-by-default API, Supabase JWT verifier, allowlisted/idempotent command gateway, durable Postgres jobs/outbox, and bounded worker/publisher loops are implemented. Live command wiring, model gateway, deployment lifecycle, and observability remain gated work. |
+| S3 platform build | In progress; deterministic backend vertical slice built | The locked-by-default API, Supabase JWT verifier, allowlisted/idempotent command gateway, durable Postgres jobs/outbox/results, owner-only result reads, and bounded worker/publisher loops are implemented. UI result polling, model gateway, deployment lifecycle, and observability remain gated work. |
 
 Recent implementation evidence is maintained in [`s1/README.md`](s1/README.md) and [`s1/production-rollout.md`](s1/production-rollout.md). The successful legacy extraction smoke run establishes current behavior only; it is not evidence that the future OCR/layout pipeline meets S6 quality gates.
 
@@ -352,6 +352,17 @@ and
 [`s3/evidence/20260914T143721Z-command-api-probe.json`](s3/evidence/20260914T143721Z-command-api-probe.json),
 with Google-session parity recorded in
 [`s3/evidence/20260914T160656Z-google-command-probe.json`](s3/evidence/20260914T160656Z-google-command-probe.json).
+The non-model worker path now validates a route-specific result schema before
+committing the result, job success, and outbox event in one Postgres transaction.
+`GET /v1/jobs/{job_id}` exposes the job and accepted result only through the
+authenticated personal-tenant boundary; direct browser roles remain denied.
+The shared-project publisher probe is explicitly tenant-scoped so test cleanup
+cannot consume unrelated outbox work. The additive result migration is applied
+to the linked test project and its 14-check self-cleaning live probe passed;
+sanitized evidence is recorded in
+[`s3/evidence/20260914T180837Z-postgres-runtime-probe.json`](s3/evidence/20260914T180837Z-postgres-runtime-probe.json).
+The browser has not yet polled this completed result under both authentication
+methods, so the full UI-to-result integration gate remains open.
 
 ### Purpose
 

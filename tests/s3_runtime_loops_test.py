@@ -9,6 +9,8 @@ import sys
 import unittest
 from uuid import UUID
 
+from pydantic import BaseModel, ConfigDict
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
@@ -46,6 +48,13 @@ TENANT = UUID("11111111-1111-4111-8111-111111111111")
 NOW = datetime(2026, 9, 14, 14, tzinfo=timezone.utc)
 
 
+class FixtureResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stored: bool
+    resource_id: str
+
+
 class MutableClock:
     def __init__(self) -> None:
         self.now = NOW
@@ -73,13 +82,22 @@ async def verified(_context, _candidate) -> WorkflowDisposition:
     return WorkflowDisposition.SUCCEEDED
 
 
-def definition(execute, verify=verified, *, timeout: float = 1) -> WorkflowDefinition:
+def definition(
+    execute,
+    verify=verified,
+    *,
+    timeout: float = 1,
+    result_model=None,
+    result_schema_version=None,
+) -> WorkflowDefinition:
     return WorkflowDefinition(
         workflow_name="resource.extraction",
         workflow_version="v1",
         execute=execute,
         verify=verify,
         timeout_seconds=timeout,
+        result_model=result_model,
+        result_schema_version=result_schema_version,
     )
 
 
@@ -121,21 +139,58 @@ class WorkerLoopTest(unittest.IsolatedAsyncioTestCase):
         async def execute(context):
             calls.append("execute")
             self.assertEqual(context.command.payload["resource_id"], "paper-1")
-            return {"stored": True}
+            return {"stored": True, "resource_id": "paper-1"}
 
         async def verify(_context, candidate):
             calls.append("verify")
-            self.assertEqual(candidate, {"stored": True})
+            self.assertEqual(
+                candidate, {"stored": True, "resource_id": "paper-1"}
+            )
             return WorkflowDisposition.SUCCEEDED
 
         submitted = self.submit()
-        result = await self.worker(definition(execute, verify)).run_batch()
+        result = await self.worker(
+            definition(
+                execute,
+                verify,
+                result_model=FixtureResult,
+                result_schema_version="resource_extract_result.v1",
+            )
+        ).run_batch()
         self.assertTrue(result.idle_reached)
         self.assertEqual(calls, ["execute", "verify"])
         self.assertEqual(result.traces[0].status, "succeeded")
         self.assertEqual(
             self.runtime.get(TENANT, submitted.job.job_id).status,
             JobStatus.SUCCEEDED,
+        )
+        stored_result = self.runtime.get_result(TENANT, submitted.job.job_id)
+        assert stored_result is not None
+        self.assertEqual(
+            stored_result.output,
+            {"stored": True, "resource_id": "paper-1"},
+        )
+        self.assertEqual(
+            stored_result.output_schema_version, "resource_extract_result.v1"
+        )
+
+    async def test_invalid_registered_result_fails_without_persistence(self) -> None:
+        async def invalid(_context):
+            return {"stored": True, "unexpected": "private content"}
+
+        submitted = self.submit()
+        trace = await self.worker(
+            definition(
+                invalid,
+                result_model=FixtureResult,
+                result_schema_version="resource_extract_result.v1",
+            )
+        ).run_once()
+        assert trace is not None
+        self.assertEqual(trace.status, "failed")
+        self.assertEqual(trace.error_code, ErrorCode.INVALID_INPUT)
+        self.assertIsNone(
+            self.runtime.get_result(TENANT, submitted.job.job_id)
         )
 
     async def test_verifier_and_explicit_signal_route_to_human_review(self) -> None:

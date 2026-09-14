@@ -54,12 +54,14 @@ class PostgresOutboxRepository:
         *,
         token_factory: Callable[[], UUID] = uuid4,
         lease_duration: timedelta = timedelta(minutes=1),
+        claim_tenant_id: UUID | None = None,
     ) -> None:
         if lease_duration <= timedelta(0):
             raise ValueError("lease_duration must be positive")
         self._connection_factory = connection_factory
         self._token_factory = token_factory
         self._lease_duration = lease_duration
+        self._claim_tenant_id = claim_tenant_id
 
     @property
     def lease_duration(self) -> timedelta:
@@ -78,6 +80,15 @@ class PostgresOutboxRepository:
                 database_now = cursor.fetchone()["database_now"]
                 lease_token = self._token_factory()
                 lease_expires_at = database_now + self._lease_duration
+                tenant_clause = (
+                    "and tenant_id = %s" if self._claim_tenant_id is not None else ""
+                )
+                parameters: list[Any] = [database_now]
+                if self._claim_tenant_id is not None:
+                    parameters.append(self._claim_tenant_id)
+                parameters.extend(
+                    [database_now, lease_token, lease_expires_at]
+                )
                 cursor.execute(
                     f"""
                     with candidate as (
@@ -86,6 +97,7 @@ class PostgresOutboxRepository:
                       where published_at is null
                         and dead_lettered_at is null
                         and available_at <= %s
+                        {tenant_clause}
                         and publish_attempt_count < 20
                         and (
                           publish_lease_expires_at is null
@@ -103,7 +115,7 @@ class PostgresOutboxRepository:
                     where event.event_id = candidate.event_id
                     returning {OUTBOX_UPDATE_COLUMNS}
                     """,
-                    (database_now, database_now, lease_token, lease_expires_at),
+                    parameters,
                 )
                 row = cursor.fetchone()
                 if row is None:

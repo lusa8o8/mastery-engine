@@ -48,6 +48,14 @@ exist, but production deployment and the model-powered rooms are not wired yet.
   paths through the same principal contract and durable Postgres command
   submission, replay and conflict behavior. These probes prove the boundary;
   they do not turn on product-route command handling.
+- Registered workers may attach a route-specific Pydantic result contract.
+  Successful output is validated and stored with job completion and its outbox
+  event in one transaction; invalid output fails without result persistence.
+- `GET /v1/jobs/{job_id}` returns a durable job snapshot and accepted result
+  through the authenticated tenant boundary. Missing and foreign IDs both
+  return `NOT_FOUND`; browser roles cannot query the underlying result table.
+- A tenant-scoped option on outbox claims keeps shared-project probes from
+  consuming unrelated events. Production publishers remain global by default.
 
 ## Local locked process
 
@@ -65,6 +73,8 @@ explicit principal fixtures.
   running worker and publisher processes.
 - Production construction and injection of the Postgres command service for
   real product routes.
+- Frontend submission and bounded result polling through the authenticated API,
+  verified under both password and Google sessions.
 - Model gateway, usage/cost limits and provider timeout classification.
 - Structured redacted telemetry and audit persistence.
 - S3 crash, retry, cancellation, authorization and tenant-isolation gates.
