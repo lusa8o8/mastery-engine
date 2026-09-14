@@ -1,6 +1,6 @@
 # S1 Production Rollout
 
-Status: **base and model-allowance follow-up deployed on 2026-09-13; authenticated two-account browser journey passed**
+Status: **complete — deployment, authenticated two-account browser journey, and production-isolated security probe passed**
 
 This is a short coordinated cutover because the new browser code, database functions, and Edge Functions depend on one another. All current accounts are owner-controlled test accounts, but the sequence remains fail-closed.
 
@@ -59,7 +59,8 @@ For the model-allowance follow-up, repeat the same preflight and confirm the dry
   - User B signed in as a visibly distinct tenant with its own usage, empty session history, and its own paper library.
   - User B could not see User A's tutorial sheet and direct navigation to User A's known session ID returned the structured ownership denial: `This session does not belong to the current student.`
   - Browser diagnostics contained no application errors or exposed credentials/document bodies; only known React Router v7 future-flag warnings were present.
-- Direct storage-prefix mutation probes and allowance-exhaustion replay are intentionally assigned to the non-production authenticated function suite. They are not performed destructively against the live project.
+- Docker and a second Supabase project are unavailable, and this project contains only owner-controlled test accounts and backed-up papers. Direct storage-prefix mutation, cross-tenant CRUD, function-attribution and allowance-exhaustion checks therefore run as a production-isolated probe using only newly created UUID-namespaced fixtures. The harness must refuse an unconfirmed project ref, stop denied paths before Claude, clean up in all outcomes, and verify that no probe rows or objects remain.
+- The production-isolated probe passed 11/11 checks on 2026-09-14. It removed its object and two temporary Auth users and verified zero remaining probe rows. Sanitized evidence: [`evidence/20260914T094544Z-production-isolation-probe.json`](evidence/20260914T094544Z-production-isolation-probe.json).
 
 ## Forward-fix and recovery
 

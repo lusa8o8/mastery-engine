@@ -134,3 +134,18 @@ test('tutor question IDs and extraction retries are durable', async () => {
   assert.doesNotMatch(tokenClient, /from\('token_logs'\)\.insert/)
   assert.match(extract, /context: 'paper_extraction'/)
 })
+
+test('production isolation probe is explicit, bounded and cleanup verified', async () => {
+  const probe = await read('scripts/s1-production-isolation-probe.mjs')
+
+  assert.match(probe, /--confirm-project-ref/)
+  assert.match(probe, /--cleanup-stale/)
+  assert.match(probe, /Confirmed project ref does not match SUPABASE_URL/)
+  assert.match(probe, /AbortSignal\.timeout\(requestTimeoutMs\)/)
+  assert.match(probe, /randomUUID\(\)/)
+  assert.match(probe, /finally \{/)
+  assert.match(probe, /deleteUser\(id\)/)
+  assert.match(probe, /verified_empty/)
+  assert.match(probe, /model_provider_calls_expected: 0/)
+  assert.doesNotMatch(probe, /ANTHROPIC_API_KEY/)
+})

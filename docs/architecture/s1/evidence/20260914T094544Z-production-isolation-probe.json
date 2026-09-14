@@ -1,0 +1,145 @@
+{
+  "schema_version": "1.0",
+  "probe": "s1-production-isolation",
+  "environment": "production-test-only-project",
+  "project_ref": "jipewywqflgandjcqbjl",
+  "app_commit": "a9ac076",
+  "run_id": "e9bb4e20-0780-45fc-a695-8ed0caf3ada1",
+  "started_at": "2026-09-14T09:45:44.562Z",
+  "completed_at": "2026-09-14T09:46:15.530Z",
+  "status": "passed",
+  "critical_failure": false,
+  "model_provider_calls_expected": 0,
+  "checks": [
+    {
+      "id": "AUTH-001",
+      "status": "passed",
+      "description": "Temporary users receive distinct authenticated principals",
+      "detail": {
+        "principals": 2
+      }
+    },
+    {
+      "id": "DB-001",
+      "status": "passed",
+      "description": "User B cannot select User A paper, session, or message"
+    },
+    {
+      "id": "DB-002",
+      "status": "passed",
+      "description": "User B cannot insert rows attributed to User A"
+    },
+    {
+      "id": "DB-003",
+      "status": "passed",
+      "description": "User B cannot update or delete User A rows"
+    },
+    {
+      "id": "DB-004",
+      "status": "passed",
+      "description": "Browser principals cannot write server-owned usage tables"
+    },
+    {
+      "id": "STORAGE-001",
+      "status": "passed",
+      "description": "User B cannot list, read, or sign User A object"
+    },
+    {
+      "id": "STORAGE-002",
+      "status": "passed",
+      "description": "User B cannot upload, overwrite, or delete inside User A prefix"
+    },
+    {
+      "id": "FUNCTION-001",
+      "status": "passed",
+      "description": "User B cannot invoke Atlas chat against User A session"
+    },
+    {
+      "id": "FUNCTION-002",
+      "status": "passed",
+      "description": "User B cannot invoke extraction against User A paper"
+    },
+    {
+      "id": "FUNCTION-003",
+      "status": "passed",
+      "description": "Anonymous callers are denied by every model boundary",
+      "detail": {
+        "boundaries": 3
+      }
+    },
+    {
+      "id": "ALLOWANCE-001",
+      "status": "passed",
+      "description": "Exhausted allowance fails before any model-provider call"
+    }
+  ],
+  "cleanup": [
+    {
+      "target": "storage_object",
+      "status": "removed"
+    },
+    {
+      "target": "temporary_auth_user",
+      "status": "removed"
+    },
+    {
+      "target": "temporary_auth_user",
+      "status": "removed"
+    },
+    {
+      "target": "papers_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "papers_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "questions_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "questions_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "sessions_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "sessions_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "token_logs_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "token_logs_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "model_call_allowances_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "model_call_allowances_rows",
+      "status": "verified_empty",
+      "count": 0
+    },
+    {
+      "target": "message_row",
+      "status": "verified_empty",
+      "count": 0
+    }
+  ]
+}

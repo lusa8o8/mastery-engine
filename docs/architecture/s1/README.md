@@ -1,6 +1,6 @@
 # S1 — Reproducible Database, Security and Prototype Stabilization
 
-Status: **production infrastructure deployed; authenticated two-account browser journey passed; non-production function suite pending**
+Status: **complete — production infrastructure deployed and both authenticated browser and production-isolated security gates passed**
 
 In plain language: this stage makes today’s Atlas safer and repeatable before its larger architecture changes. It is not the new tutoring design.
 
@@ -80,7 +80,22 @@ Do not run the migration merely because the local replay passes. Before deployme
 - Additive migration `202609130004_add_model_call_allowances.sql` applied; remote database lint reports no schema errors.
 - `atlas-chat` v11, `atlas-extract` v6 and `atlas-variant` v3 are active with JWT verification; unauthenticated requests to each return HTTP 401.
 
-## Remaining S1 work
+## Final production-isolated security gate — 2026-09-14
 
-- Add authenticated function-level regression tests against a non-production Supabase environment.
-- Cover direct cross-tenant storage mutation and allowance-exhaustion replay in that non-production suite; do not use production data for destructive probes.
+Docker and a second Supabase project were unavailable, so the remaining checks ran against the current test-only project through `scripts/s1-production-isolation-probe.mjs`. The harness requires the exact project ref on every run, creates only random UUID-namespaced fixtures, uses ordinary authenticated or anonymous clients for attack attempts, bounds each remote request, and cleans up in all handled outcomes.
+
+Result: **pass — 11/11 checks**. Cross-tenant database reads/writes, Storage list/read/sign/upload/update/delete, session and extraction function attribution, anonymous model-boundary access, and allowance exhaustion were all denied as expected. The allowance failure created no token log or additional claim, which demonstrates that the tested request stopped before the model-provider boundary.
+
+Cleanup removed the temporary Storage object and both temporary Auth users, then verified zero remaining paper, question, session, message, token-log, and model-allowance records for the probe principals. Sanitized evidence: [`evidence/20260914T094544Z-production-isolation-probe.json`](evidence/20260914T094544Z-production-isolation-probe.json).
+
+Run deliberately:
+
+```powershell
+pnpm run test:s1:production-probe -- --confirm-project-ref <exact-project-ref>
+```
+
+If a process is interrupted, inspect and remove only stale probe-prefixed identities before retrying:
+
+```powershell
+pnpm run test:s1:production-probe -- --confirm-project-ref <exact-project-ref> --cleanup-stale
+```
