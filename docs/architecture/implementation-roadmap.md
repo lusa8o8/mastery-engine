@@ -21,7 +21,7 @@ The governing rule is:
 | S1 production-isolated security probe | Complete | Eleven authenticated, anonymous, database, Storage, function, and allowance checks passed against UUID-namespaced fixtures in the current test-only project; both temporary users, the object, and all probe rows were removed and verified absent. |
 | S2A common contracts | Complete - frozen v1.0.0 | Extraction, interactive tutoring and exam/remediation scenarios passed the common-envelope review. Ownership, lifecycle, deletion, tenant, OAuth, retry and trace rules are fixed for v1. |
 | S4A extraction baseline | In progress | Dataset governance, split checks, planned synthetic cases, and a private PDF candidate registry exist. Reviewed ground truth and an isolated executable held-out set are still required. |
-| S3 platform build | Ready to begin; live integration still gated | S2A is frozen, so the Python API/worker shell may be built against fixtures. It must not connect to production until S3 authorization, recovery, idempotency, timeout and observability tests pass. |
+| S3 platform build | In progress; API shell complete, live integration gated | The locked-by-default FastAPI shell now has request IDs, typed errors, health/readiness and injected fixture authentication. JWT, Postgres, jobs, outbox, model gateway and observability remain gated work. |
 
 Recent implementation evidence is maintained in [`s1/README.md`](s1/README.md) and [`s1/production-rollout.md`](s1/production-rollout.md). The successful legacy extraction smoke run establishes current behavior only; it is not evidence that the future OCR/layout pipeline meets S6 quality gates.
 
@@ -317,6 +317,13 @@ live integration.
 Entity modelling can be divided by pack, but one contract owner integrates naming, identifiers, lifecycle, and cross-domain invariants. A consumer may begin when all packs it imports are frozen; it does not wait for unrelated later packs. Contract changes are additive and versioned after consumers begin.
 
 ## S3 — Backend Platform and Boring Workflow Runtime
+
+Implementation checkpoint (14 September 2026): `backend/atlas_api/` provides a
+fixture-tested FastAPI shell that imports the frozen S2A contracts. It starts in
+locked mode, reports liveness separately from dependency readiness, rejects all
+protected access without an injected authenticator, emits typed content-safe
+errors, and refuses the fixture authenticator in production mode. This is a
+build milestone only: it has no Supabase, Postgres, worker or model connection.
 
 ### Purpose
 

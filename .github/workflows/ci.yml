@@ -22,11 +22,12 @@ jobs:
         with:
           python-version: '3.13'
       - run: npm ci
-      - run: python -m pip install -r requirements-contracts.txt
+      - run: python -m pip install -r requirements-backend.txt
       - run: npm run lint
       - run: npm run test:s0
       - run: npm run test:s1
       - run: npm run test:s2a
+      - run: npm run test:s3
       - run: npm run test:s4a
       - run: npm run test:oauth
       - run: npm run build
