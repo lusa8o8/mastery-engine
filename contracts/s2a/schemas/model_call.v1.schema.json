@@ -1,5 +1,19 @@
 {
   "$defs": {
+    "ErrorCode": {
+      "enum": [
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "CONFLICT",
+        "INVALID_INPUT",
+        "RATE_LIMITED",
+        "DEPENDENCY_FAILED",
+        "INTERNAL_ERROR"
+      ],
+      "title": "ErrorCode",
+      "type": "string"
+    },
     "ModelCallStatus": {
       "enum": [
         "reserved",
@@ -24,20 +38,41 @@
       "title": "Model Call Id",
       "type": "string"
     },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
     "tenant_id": {
       "format": "uuid",
       "title": "Tenant Id",
       "type": "string"
     },
     "job_id": {
-      "format": "uuid",
-      "title": "Job Id",
-      "type": "string"
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Job Id"
     },
     "step_id": {
-      "format": "uuid",
-      "title": "Step Id",
-      "type": "string"
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Step Id"
     },
     "route": {
       "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
@@ -68,6 +103,13 @@
     },
     "status": {
       "$ref": "#/$defs/ModelCallStatus"
+    },
+    "attempt_number": {
+      "default": 1,
+      "maximum": 2,
+      "minimum": 1,
+      "title": "Attempt Number",
+      "type": "integer"
     },
     "input_tokens": {
       "default": 0,
@@ -104,14 +146,24 @@
       ],
       "default": null,
       "title": "Completed At"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
     "schema_version",
     "model_call_id",
+    "request_id",
     "tenant_id",
-    "job_id",
-    "step_id",
     "route",
     "provider",
     "model",

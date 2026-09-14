@@ -55,6 +55,53 @@
         "type": "object",
         "$id": "https://schemas.atlas.local/s2a/principal.v1.schema.json"
       },
+      "tenant_scope": {
+        "$defs": {
+          "TenantAccess": {
+            "enum": [
+              "owner"
+            ],
+            "title": "TenantAccess",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "tenant_scope.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "principal_id": {
+            "format": "uuid",
+            "title": "Principal Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "access": {
+            "$ref": "#/$defs/TenantAccess"
+          },
+          "resolved_at": {
+            "format": "date-time",
+            "title": "Resolved At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "principal_id",
+          "tenant_id",
+          "access",
+          "resolved_at"
+        ],
+        "title": "TenantScope",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/tenant_scope.v1.schema.json"
+      },
       "auth_return_target": {
         "additionalProperties": false,
         "properties": {
@@ -91,6 +138,11 @@
           "schema_version": {
             "const": "command.v1",
             "title": "Schema Version",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
             "type": "string"
           },
           "command_id": {
@@ -138,6 +190,7 @@
         },
         "required": [
           "schema_version",
+          "request_id",
           "command_id",
           "command_type",
           "principal_id",
@@ -239,6 +292,11 @@
             "title": "Schema Version",
             "type": "string"
           },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
           "job_id": {
             "format": "uuid",
             "title": "Job Id",
@@ -280,6 +338,11 @@
             "title": "Max Attempts",
             "type": "integer"
           },
+          "available_at": {
+            "format": "date-time",
+            "title": "Available At",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -303,6 +366,19 @@
             "default": null,
             "title": "Lease Expires At"
           },
+          "cancel_requested_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cancel Requested At"
+          },
           "completed_at": {
             "anyOf": [
               {
@@ -319,12 +395,14 @@
         },
         "required": [
           "schema_version",
+          "request_id",
           "job_id",
           "tenant_id",
           "command_id",
           "workflow_name",
           "workflow_version",
           "status",
+          "available_at",
           "created_at",
           "updated_at"
         ],
@@ -394,6 +472,16 @@
             "title": "Step Name",
             "type": "string"
           },
+          "step_version": {
+            "pattern": "^v[1-9][0-9]*$",
+            "title": "Step Version",
+            "type": "string"
+          },
+          "required": {
+            "default": true,
+            "title": "Required",
+            "type": "boolean"
+          },
           "status": {
             "$ref": "#/$defs/StepStatus"
           },
@@ -402,6 +490,26 @@
             "minimum": 0,
             "title": "Attempt Count",
             "type": "integer"
+          },
+          "max_attempts": {
+            "default": 3,
+            "maximum": 10,
+            "minimum": 1,
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "lease_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lease Expires At"
           },
           "started_at": {
             "anyOf": [
@@ -448,6 +556,7 @@
           "tenant_id",
           "step_key",
           "step_name",
+          "step_version",
           "status"
         ],
         "title": "WorkflowStep",
@@ -456,6 +565,20 @@
       },
       "model_call": {
         "$defs": {
+          "ErrorCode": {
+            "enum": [
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "CONFLICT",
+              "INVALID_INPUT",
+              "RATE_LIMITED",
+              "DEPENDENCY_FAILED",
+              "INTERNAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          },
           "ModelCallStatus": {
             "enum": [
               "reserved",
@@ -480,20 +603,41 @@
             "title": "Model Call Id",
             "type": "string"
           },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
           "tenant_id": {
             "format": "uuid",
             "title": "Tenant Id",
             "type": "string"
           },
           "job_id": {
-            "format": "uuid",
-            "title": "Job Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Job Id"
           },
           "step_id": {
-            "format": "uuid",
-            "title": "Step Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Step Id"
           },
           "route": {
             "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
@@ -524,6 +668,13 @@
           },
           "status": {
             "$ref": "#/$defs/ModelCallStatus"
+          },
+          "attempt_number": {
+            "default": 1,
+            "maximum": 2,
+            "minimum": 1,
+            "title": "Attempt Number",
+            "type": "integer"
           },
           "input_tokens": {
             "default": 0,
@@ -560,14 +711,24 @@
             ],
             "default": null,
             "title": "Completed At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
           "schema_version",
           "model_call_id",
+          "request_id",
           "tenant_id",
-          "job_id",
-          "step_id",
           "route",
           "provider",
           "model",
@@ -581,6 +742,22 @@
         "$id": "https://schemas.atlas.local/s2a/model_call.v1.schema.json"
       },
       "outbox_event": {
+        "$defs": {
+          "ErrorCode": {
+            "enum": [
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "CONFLICT",
+              "INVALID_INPUT",
+              "RATE_LIMITED",
+              "DEPENDENCY_FAILED",
+              "INTERNAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          }
+        },
         "additionalProperties": false,
         "properties": {
           "schema_version": {
@@ -592,6 +769,29 @@
             "format": "uuid",
             "title": "Event Id",
             "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "correlation_id": {
+            "format": "uuid",
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "causation_event_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Causation Event Id"
           },
           "event_schema_version": {
             "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
@@ -633,6 +833,13 @@
             "title": "Available At",
             "type": "string"
           },
+          "publish_attempt_count": {
+            "default": 0,
+            "maximum": 20,
+            "minimum": 0,
+            "title": "Publish Attempt Count",
+            "type": "integer"
+          },
           "published_at": {
             "anyOf": [
               {
@@ -645,11 +852,24 @@
             ],
             "default": null,
             "title": "Published At"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
           "schema_version",
           "event_id",
+          "request_id",
+          "correlation_id",
           "event_schema_version",
           "tenant_id",
           "aggregate_type",
@@ -758,7 +978,28 @@
             "type": "string"
           },
           "metadata": {
-            "additionalProperties": true,
+            "maxProperties": 24,
+            "patternProperties": {
+              "^[a-z][a-z0-9_.-]{1,63}$": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
             "title": "Metadata",
             "type": "object"
           }

@@ -1,0 +1,47 @@
+{
+  "$defs": {
+    "TenantAccess": {
+      "enum": [
+        "owner"
+      ],
+      "title": "TenantAccess",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "tenant_scope.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "principal_id": {
+      "format": "uuid",
+      "title": "Principal Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "access": {
+      "$ref": "#/$defs/TenantAccess"
+    },
+    "resolved_at": {
+      "format": "date-time",
+      "title": "Resolved At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "principal_id",
+    "tenant_id",
+    "access",
+    "resolved_at"
+  ],
+  "title": "TenantScope",
+  "type": "object",
+  "$id": "https://schemas.atlas.local/s2a/tenant_scope.v1.schema.json"
+}

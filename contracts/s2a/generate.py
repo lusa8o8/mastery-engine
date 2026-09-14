@@ -22,13 +22,16 @@ def json_type(schema: dict) -> str:
     if "enum" in schema:
         return " | ".join(json.dumps(value) for value in schema["enum"])
     kind = schema.get("type")
+    if kind == "object":
+        values = schema.get("additionalProperties")
+        value_type = json_type(values) if isinstance(values, dict) else "unknown"
+        return f"Record<string, {value_type}>"
     return {
         "string": "string",
         "integer": "number",
         "number": "number",
         "boolean": "boolean",
         "null": "null",
-        "object": "Record<string, unknown>",
     }.get(kind, "unknown") if kind != "array" else f"{json_type(schema['items'])}[]"
 
 

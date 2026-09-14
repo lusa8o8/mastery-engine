@@ -93,7 +93,28 @@
       "type": "string"
     },
     "metadata": {
-      "additionalProperties": true,
+      "maxProperties": 24,
+      "patternProperties": {
+        "^[a-z][a-z0-9_.-]{1,63}$": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
       "title": "Metadata",
       "type": "object"
     }

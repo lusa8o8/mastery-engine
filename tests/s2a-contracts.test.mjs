@@ -38,7 +38,7 @@ function validate(value, schema, root = schema, path = '$') {
     if (schema.maxLength !== undefined && value.length > schema.maxLength) errors.push(`${path}: too long`)
     if (schema.pattern && !new RegExp(schema.pattern, 'u').test(value)) errors.push(`${path}: pattern mismatch`)
     if (schema.format === 'uuid' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) errors.push(`${path}: invalid uuid`)
-    if (schema.format === 'date-time' && Number.isNaN(Date.parse(value))) errors.push(`${path}: invalid date-time`)
+    if (schema.format === 'date-time' && (!/T.*(?:Z|[+-]\d{2}:\d{2})$/i.test(value) || Number.isNaN(Date.parse(value)))) errors.push(`${path}: invalid date-time`)
   }
   if (typeof value === 'number') {
     if (schema.minimum !== undefined && value < schema.minimum) errors.push(`${path}: below minimum`)
@@ -48,12 +48,16 @@ function validate(value, schema, root = schema, path = '$') {
     if (schema.minItems !== undefined && value.length < schema.minItems) errors.push(`${path}: too few items`)
     value.forEach((item, index) => errors.push(...validate(item, schema.items ?? {}, root, `${path}[${index}]`)))
   } else if (value !== null && typeof value === 'object') {
+    if (schema.minProperties !== undefined && Object.keys(value).length < schema.minProperties) errors.push(`${path}: too few properties`)
+    if (schema.maxProperties !== undefined && Object.keys(value).length > schema.maxProperties) errors.push(`${path}: too many properties`)
     for (const required of schema.required ?? []) {
       if (!(required in value)) errors.push(`${path}.${required}: required`)
     }
     for (const [key, item] of Object.entries(value)) {
+      if (schema.propertyNames) errors.push(...validate(key, schema.propertyNames, root, `${path} key`))
       if (schema.properties?.[key]) errors.push(...validate(item, schema.properties[key], root, `${path}.${key}`))
       else if (schema.additionalProperties === false) errors.push(`${path}.${key}: unexpected`)
+      else if (schema.additionalProperties && typeof schema.additionalProperties === 'object') errors.push(...validate(item, schema.additionalProperties, root, `${path}.${key}`))
     }
   }
   return errors
@@ -73,7 +77,7 @@ test('JavaScript validates the same S2A fixture acceptance matrix', async () => 
 
 test('generated client types expose every common contract', async () => {
   const types = await readFile(new URL('../contracts/s2a/types.ts', import.meta.url), 'utf8')
-  for (const name of ['Principal', 'AuthReturnTarget', 'CommandEnvelope', 'ErrorEnvelope', 'WorkflowJob', 'WorkflowStep', 'ModelCallRecord', 'OutboxEvent', 'AuditEvent']) {
+  for (const name of ['Principal', 'TenantScope', 'AuthReturnTarget', 'CommandEnvelope', 'ErrorEnvelope', 'WorkflowJob', 'WorkflowStep', 'ModelCallRecord', 'OutboxEvent', 'AuditEvent']) {
     assert.match(types, new RegExp(`export interface ${name} \\{`))
   }
 })

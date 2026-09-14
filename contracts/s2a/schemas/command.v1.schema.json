@@ -6,6 +6,11 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
     "command_id": {
       "format": "uuid",
       "title": "Command Id",
@@ -51,6 +56,7 @@
   },
   "required": [
     "schema_version",
+    "request_id",
     "command_id",
     "command_type",
     "principal_id",

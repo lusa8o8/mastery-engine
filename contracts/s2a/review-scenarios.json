@@ -1,0 +1,35 @@
+{
+  "review_version": "s2a-freeze-review.v1",
+  "scenarios": [
+    {
+      "id": "paper-upload-and-extraction",
+      "execution_mode": "background_job",
+      "command_type": "resource.extract",
+      "domain_payload_schema": "resource_extract.v1",
+      "imports_after_s2a": ["s2b-resource-evidence"],
+      "common_contract_sequence": ["principal.v1", "tenant_scope.v1", "command.v1", "workflow_job.v1", "workflow_step.v1", "model_call.v1", "outbox_event.v1", "audit_event.v1"],
+      "required_steps": ["validate_document", "extract_pages", "validate_extraction", "persist_artifact"],
+      "failure_policy": "Invalid or ambiguous extraction stops downstream persistence and moves the job to review_required."
+    },
+    {
+      "id": "atlas-tutor-turn-and-resume",
+      "execution_mode": "interactive",
+      "command_type": "learning.tutor_turn",
+      "domain_payload_schema": "tutor_turn.v1",
+      "imports_after_s2a": ["s2b-resource-evidence", "s2c-learning"],
+      "common_contract_sequence": ["principal.v1", "tenant_scope.v1", "command.v1", "model_call.v1", "audit_event.v1"],
+      "required_steps": ["resolve_scope", "load_durable_context", "produce_turn", "validate_turn", "persist_turn"],
+      "failure_policy": "A failed or invalid turn does not advance mastery or overwrite durable context."
+    },
+    {
+      "id": "exam-generation-marking-and-remediation",
+      "execution_mode": "background_job",
+      "command_type": "assessment.run",
+      "domain_payload_schema": "assessment_run.v1",
+      "imports_after_s2a": ["s2b-resource-evidence", "s2c-learning", "s2d-assessment"],
+      "common_contract_sequence": ["principal.v1", "tenant_scope.v1", "command.v1", "workflow_job.v1", "workflow_step.v1", "model_call.v1", "outbox_event.v1", "audit_event.v1"],
+      "required_steps": ["freeze_scope", "generate_exam", "validate_exam", "mark_attempt", "validate_marking", "create_remediation_assignments"],
+      "failure_policy": "No exam is published without validation; no remediation state is created from failed or unaccepted marking."
+    }
+  ]
+}

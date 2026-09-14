@@ -1,4 +1,20 @@
 {
+  "$defs": {
+    "ErrorCode": {
+      "enum": [
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "CONFLICT",
+        "INVALID_INPUT",
+        "RATE_LIMITED",
+        "DEPENDENCY_FAILED",
+        "INTERNAL_ERROR"
+      ],
+      "title": "ErrorCode",
+      "type": "string"
+    }
+  },
   "additionalProperties": false,
   "properties": {
     "schema_version": {
@@ -10,6 +26,29 @@
       "format": "uuid",
       "title": "Event Id",
       "type": "string"
+    },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "correlation_id": {
+      "format": "uuid",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "causation_event_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Causation Event Id"
     },
     "event_schema_version": {
       "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
@@ -51,6 +90,13 @@
       "title": "Available At",
       "type": "string"
     },
+    "publish_attempt_count": {
+      "default": 0,
+      "maximum": 20,
+      "minimum": 0,
+      "title": "Publish Attempt Count",
+      "type": "integer"
+    },
     "published_at": {
       "anyOf": [
         {
@@ -63,11 +109,24 @@
       ],
       "default": null,
       "title": "Published At"
+    },
+    "last_error_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
     "schema_version",
     "event_id",
+    "request_id",
+    "correlation_id",
     "event_schema_version",
     "tenant_id",
     "aggregate_type",

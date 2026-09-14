@@ -60,6 +60,16 @@
       "title": "Step Name",
       "type": "string"
     },
+    "step_version": {
+      "pattern": "^v[1-9][0-9]*$",
+      "title": "Step Version",
+      "type": "string"
+    },
+    "required": {
+      "default": true,
+      "title": "Required",
+      "type": "boolean"
+    },
     "status": {
       "$ref": "#/$defs/StepStatus"
     },
@@ -68,6 +78,26 @@
       "minimum": 0,
       "title": "Attempt Count",
       "type": "integer"
+    },
+    "max_attempts": {
+      "default": 3,
+      "maximum": 10,
+      "minimum": 1,
+      "title": "Max Attempts",
+      "type": "integer"
+    },
+    "lease_expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lease Expires At"
     },
     "started_at": {
       "anyOf": [
@@ -114,6 +144,7 @@
     "tenant_id",
     "step_key",
     "step_name",
+    "step_version",
     "status"
   ],
   "title": "WorkflowStep",

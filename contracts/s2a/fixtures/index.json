@@ -8,6 +8,7 @@
     {"id": "legacy-command", "file": "command-legacy.json", "contract": "command", "accepted": false, "category": "legacy"},
     {"id": "password-principal", "file": "principal-password.json", "contract": "principal", "accepted": true, "category": "auth"},
     {"id": "google-principal", "file": "principal-google.json", "contract": "principal", "accepted": true, "category": "auth"},
+    {"id": "normal-tenant-scope", "file": "tenant-scope-normal.json", "contract": "tenant_scope", "accepted": true, "category": "normal"},
     {"id": "normal-auth-return", "file": "auth-return-normal.json", "contract": "auth_return_target", "accepted": true, "category": "normal"},
     {"id": "normal-workflow-job", "file": "workflow-job-normal.json", "contract": "workflow_job", "accepted": true, "category": "normal"},
     {"id": "normal-workflow-step", "file": "workflow-step-normal.json", "contract": "workflow_step", "accepted": true, "category": "normal"},

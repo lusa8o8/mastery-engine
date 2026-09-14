@@ -12,12 +12,22 @@ export type ModelCallStatus = "reserved" | "running" | "succeeded" | "failed" | 
 
 export type StepStatus = "pending" | "running" | "succeeded" | "failed" | "skipped"
 
+export type TenantAccess = "owner"
+
 export interface Principal {
   schema_version: "principal.v1"
   principal_id: string
   tenant_id: string
   auth_method: AuthMethod
   authenticated_at: string
+}
+
+export interface TenantScope {
+  schema_version: "tenant_scope.v1"
+  principal_id: string
+  tenant_id: string
+  access: TenantAccess
+  resolved_at: string
 }
 
 export interface AuthReturnTarget {
@@ -28,6 +38,7 @@ export interface AuthReturnTarget {
 
 export interface CommandEnvelope {
   schema_version: "command.v1"
+  request_id: string
   command_id: string
   command_type: string
   principal_id: string
@@ -50,6 +61,7 @@ export interface ErrorEnvelope {
 
 export interface WorkflowJob {
   schema_version: "workflow_job.v1"
+  request_id: string
   job_id: string
   tenant_id: string
   command_id: string
@@ -58,9 +70,11 @@ export interface WorkflowJob {
   status: JobStatus
   attempt_count?: number
   max_attempts?: number
+  available_at: string
   created_at: string
   updated_at: string
   lease_expires_at?: string | null
+  cancel_requested_at?: string | null
   completed_at?: string | null
 }
 
@@ -71,8 +85,12 @@ export interface WorkflowStep {
   tenant_id: string
   step_key: string
   step_name: string
+  step_version: string
+  required?: boolean
   status: StepStatus
   attempt_count?: number
+  max_attempts?: number
+  lease_expires_at?: string | null
   started_at?: string | null
   completed_at?: string | null
   error_code?: ErrorCode | null
@@ -81,25 +99,31 @@ export interface WorkflowStep {
 export interface ModelCallRecord {
   schema_version: "model_call.v1"
   model_call_id: string
+  request_id: string
   tenant_id: string
-  job_id: string
-  step_id: string
+  job_id?: string | null
+  step_id?: string | null
   route: string
   provider: string
   model: string
   prompt_version: string
   output_schema_version: string
   status: ModelCallStatus
+  attempt_number?: number
   input_tokens?: number
   output_tokens?: number
   cost_usd_micros?: number
   started_at: string
   completed_at?: string | null
+  error_code?: ErrorCode | null
 }
 
 export interface OutboxEvent {
   schema_version: "outbox_event.v1"
   event_id: string
+  request_id: string
+  correlation_id: string
+  causation_event_id?: string | null
   event_schema_version: string
   tenant_id: string
   aggregate_type: string
@@ -108,7 +132,9 @@ export interface OutboxEvent {
   payload: Record<string, unknown>
   occurred_at: string
   available_at: string
+  publish_attempt_count?: number
   published_at?: string | null
+  last_error_code?: ErrorCode | null
 }
 
 export interface AuditEvent {

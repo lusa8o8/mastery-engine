@@ -20,6 +20,11 @@
       "title": "Schema Version",
       "type": "string"
     },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
     "job_id": {
       "format": "uuid",
       "title": "Job Id",
@@ -61,6 +66,11 @@
       "title": "Max Attempts",
       "type": "integer"
     },
+    "available_at": {
+      "format": "date-time",
+      "title": "Available At",
+      "type": "string"
+    },
     "created_at": {
       "format": "date-time",
       "title": "Created At",
@@ -84,6 +94,19 @@
       "default": null,
       "title": "Lease Expires At"
     },
+    "cancel_requested_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cancel Requested At"
+    },
     "completed_at": {
       "anyOf": [
         {
@@ -100,12 +123,14 @@
   },
   "required": [
     "schema_version",
+    "request_id",
     "job_id",
     "tenant_id",
     "command_id",
     "workflow_name",
     "workflow_version",
     "status",
+    "available_at",
     "created_at",
     "updated_at"
   ],

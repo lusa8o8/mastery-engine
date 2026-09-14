@@ -1,12 +1,15 @@
 {
   "pack": "s2a-common-platform",
-  "version": "1.0.0-draft.1",
-  "status": "draft",
+  "version": "1.0.0",
+  "status": "frozen",
+  "frozen_at": "2026-09-14T11:05:10Z",
   "dependencies": [],
   "source_of_truth": "models.py",
   "generated_artifacts": ["openapi.json", "types.ts", "schemas/*.json"],
+  "review_evidence": ["freeze-review.md", "review-scenarios.json", "fixtures/index.json"],
   "contracts": [
     "principal.v1",
+    "tenant_scope.v1",
     "auth_return_target.v1",
     "command.v1",
     "error.v1",
