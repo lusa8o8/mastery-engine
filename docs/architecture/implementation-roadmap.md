@@ -21,7 +21,7 @@ The governing rule is:
 | S1 production-isolated security probe | Complete | Eleven authenticated, anonymous, database, Storage, function, and allowance checks passed against UUID-namespaced fixtures in the current test-only project; both temporary users, the object, and all probe rows were removed and verified absent. |
 | S2A common contracts | Complete - frozen v1.0.0 | Extraction, interactive tutoring and exam/remediation scenarios passed the common-envelope review. Ownership, lifecycle, deletion, tenant, OAuth, retry and trace rules are fixed for v1. |
 | S4A extraction baseline | In progress | Dataset governance, split checks, planned synthetic cases, and a private PDF candidate registry exist. Reviewed ground truth and an isolated executable held-out set are still required. |
-| S3 platform build | In progress; platform runtime and JWT boundary built | The locked-by-default FastAPI shell, deterministic job runtime, durable Postgres jobs/outbox, bounded worker/publisher loops, and production Supabase JWT verifier are implemented. Authenticated command endpoints, model gateway, deployment lifecycle, and observability remain gated work. |
+| S3 platform build | In progress; authenticated command boundary built | The locked-by-default API, Supabase JWT verifier, allowlisted/idempotent command gateway, durable Postgres jobs/outbox, and bounded worker/publisher loops are implemented. Live command wiring, model gateway, deployment lifecycle, and observability remain gated work. |
 
 Recent implementation evidence is maintained in [`s1/README.md`](s1/README.md) and [`s1/production-rollout.md`](s1/production-rollout.md). The successful legacy extraction smoke run establishes current behavior only; it is not evidence that the future OCR/layout pipeline meets S6 quality gates.
 
@@ -336,10 +336,18 @@ authentication now verifies asymmetric Supabase user tokens locally against a
 pinned issuer, audience, role and algorithm, maps password and Google sessions
 to the same personal-tenant boundary, and bounds discovery timeout, payload,
 cache and unknown-key refresh behavior. The linked project advertises ES256.
-This remains a build milestone: no authenticated command endpoint, continuously
-deployed worker/publisher process, or model connection is enabled. Sanitized
-evidence is recorded in
-[`s3/evidence/20260914T134412Z-postgres-runtime-probe.json`](s3/evidence/20260914T134412Z-postgres-runtime-probe.json).
+The authenticated command endpoint now builds identity and IDs on the server,
+accepts only registered command/payload versions, requires tenant-scoped
+idempotency, and verifies the returned job's scope. It remains locked without an
+injected durable service. This is still a build milestone: live command wiring,
+a continuously deployed worker/publisher process, and model connections are not
+enabled. A self-cleaning live probe has passed the password JWT path, anonymous
+denial, durable submission/replay/conflict behavior, two-tenant separation and
+cascading cleanup. Google-session parity remains the browser-assisted half of
+this gate. Sanitized evidence is recorded in
+[`s3/evidence/20260914T134412Z-postgres-runtime-probe.json`](s3/evidence/20260914T134412Z-postgres-runtime-probe.json)
+and
+[`s3/evidence/20260914T143721Z-command-api-probe.json`](s3/evidence/20260914T143721Z-command-api-probe.json).
 
 ### Purpose
 

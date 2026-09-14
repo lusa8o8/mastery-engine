@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, ConfigDict
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.concurrency import run_in_threadpool
 
 from contracts.s2a.models import ErrorCode, ErrorEnvelope, Principal
 
@@ -19,6 +20,12 @@ from .auth import (
     parse_bearer_token,
 )
 from .config import RuntimeMode, Settings
+from .commands import (
+    CommandRequest,
+    CommandService,
+    CommandSubmission,
+    LockedCommandService,
+)
 from .errors import (
     AtlasError,
     atlas_error_handler,
@@ -79,6 +86,7 @@ def create_app(
     *,
     authenticator: Authenticator | None = None,
     readiness_probe: ReadinessProbe | None = None,
+    command_service: CommandService | None = None,
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_environment()
     if resolved_settings.runtime_mode == RuntimeMode.FIXTURE and authenticator is None:
@@ -96,6 +104,7 @@ def create_app(
     else:
         resolved_authenticator = LockedAuthenticator()
     resolved_readiness = readiness_probe or StaticReadinessProbe()
+    resolved_command_service = command_service or LockedCommandService()
     docs_url = "/docs" if resolved_settings.docs_enabled else None
     app = FastAPI(
         title="Atlas API",
@@ -106,6 +115,7 @@ def create_app(
     app.state.settings = resolved_settings
     app.state.authenticator = resolved_authenticator
     app.state.readiness_probe = resolved_readiness
+    app.state.command_service = resolved_command_service
 
     @app.middleware("http")
     async def request_id_middleware(request: Request, call_next):
@@ -151,6 +161,9 @@ def create_app(
             # A caller-supplied readiness probe cannot accidentally declare an
             # application ready while its auth boundary still rejects all work.
             checks["authentication"] = False
+        if isinstance(app.state.command_service, LockedCommandService):
+            # Readiness covers the public write path as well as process health.
+            checks["job_store"] = False
         if not checks or not all(checks.values()):
             raise AtlasError(
                 code=ErrorCode.DEPENDENCY_FAILED,
@@ -166,5 +179,35 @@ def create_app(
         principal: Annotated[Principal, Depends(current_principal)],
     ) -> Principal:
         return principal
+
+    @app.post(
+        "/v1/commands",
+        response_model=CommandSubmission,
+        status_code=202,
+        responses=ERROR_RESPONSES | {409: {"model": ErrorEnvelope}},
+    )
+    async def submit_command(
+        request: Request,
+        body: CommandRequest,
+        principal: Annotated[Principal, Depends(current_principal)],
+        idempotency_key: Annotated[
+            str,
+            Header(
+                alias="Idempotency-Key",
+                min_length=8,
+                max_length=128,
+                pattern=r"^[A-Za-z0-9._:-]+$",
+            ),
+        ],
+    ) -> CommandSubmission:
+        # Database adapters are synchronous today; keep their bounded work off
+        # the event loop until the measured load justifies an async repository.
+        return await run_in_threadpool(
+            request.app.state.command_service.submit,
+            principal,
+            request_id_for(request),
+            idempotency_key,
+            body,
+        )
 
     return app

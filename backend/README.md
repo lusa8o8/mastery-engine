@@ -4,8 +4,8 @@ This package is the incremental S3 platform runtime. It is deliberately locked
 by default; production mode enables bounded Supabase JWT verification while
 database and model-provider wiring remain separate release gates.
 
-In plain language: the front door and its safety rules now exist, but it is not
-wired to the building.
+In plain language: the secure front door and the checked job-request counter now
+exist, but production deployment and the model-powered rooms are not wired yet.
 
 ## Current behavior
 
@@ -37,6 +37,13 @@ wired to the building.
   handler timeouts, lease safety margins, retry classification and sanitized
   traces. Unknown routes fail closed; poisoned events are retained as dead
   letters instead of blocking the queue.
+- `POST /v1/commands` accepts only registered command and payload versions. The
+  client cannot supply identity, tenant, request, command or job IDs; the API
+  derives them from verified application state and checks the stored result.
+- Command writes require an `Idempotency-Key`. Repeating the same tenant-scoped
+  intent returns one job, while reusing the key for different intent returns a
+  typed conflict. The route remains locked until a durable service and explicit
+  command allowlist are injected.
 
 ## Local locked process
 
@@ -52,6 +59,9 @@ explicit principal fixtures.
 
 - Deployment entrypoints, graceful shutdown and readiness for continuously
   running worker and publisher processes.
+- Production construction of the Postgres command service and a live
+  Google authorization and idempotency browser probe. The isolated password
+  path already passes through real JWT verification and Postgres.
 - Model gateway, usage/cost limits and provider timeout classification.
 - Structured redacted telemetry and audit persistence.
 - S3 crash, retry, cancellation, authorization and tenant-isolation gates.

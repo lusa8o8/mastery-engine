@@ -59,16 +59,21 @@ async def atlas_error_handler(request: Request, error: AtlasError) -> JSONRespon
 async def validation_error_handler(
     request: Request, error: RequestValidationError
 ) -> JSONResponse:
-    # FastAPI's raw validation payload can include submitted values. Return only
-    # field locations so secrets or document content cannot be reflected.
-    fields = [".".join(str(part) for part in item["loc"]) for item in error.errors()]
+    # FastAPI's raw validation payload can include submitted values and even
+    # attacker-chosen object keys. Expose only the fixed request area.
+    locations = sorted(
+        {
+            str(item["loc"][0]) if item.get("loc") else "request"
+            for item in error.errors()
+        }
+    )
     return render_error(
         request,
         AtlasError(
             ErrorCode.INVALID_INPUT,
             "Request validation failed",
             422,
-            details={"fields": fields[:20]},
+            details={"locations": locations},
         ),
     )
 

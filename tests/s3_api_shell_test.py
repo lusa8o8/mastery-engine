@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 from backend.atlas_api.app import StaticReadinessProbe, create_app  # noqa: E402
 from backend.atlas_api.auth import FixtureAuthenticator  # noqa: E402
+from backend.atlas_api.commands import CommandSubmission  # noqa: E402
 from backend.atlas_api.config import RuntimeMode, Settings  # noqa: E402
 from contracts.s2a.models import AuthMethod, Principal  # noqa: E402
 
@@ -39,6 +40,10 @@ def fixture_app(*, ready: bool = True):
         "job_store": ready,
         "model_gateway": ready,
     }
+    class ReadyCommandService:
+        def submit(self, *_args, **_kwargs) -> CommandSubmission:
+            raise AssertionError("readiness fixture must not submit commands")
+
     return create_app(
         Settings(runtime_mode=RuntimeMode.FIXTURE, docs_enabled=False),
         authenticator=FixtureAuthenticator(
@@ -48,6 +53,7 @@ def fixture_app(*, ready: bool = True):
             }
         ),
         readiness_probe=StaticReadinessProbe(checks),
+        command_service=ReadyCommandService(),
     )
 
 
@@ -157,7 +163,9 @@ class S3ApiShellTest(unittest.IsolatedAsyncioTestCase):
         )
         response = await request(locked, "GET", "/health/ready")
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["details"]["unready"], ["authentication"])
+        self.assertEqual(
+            response.json()["details"]["unready"], ["authentication", "job_store"]
+        )
 
     async def test_fixture_authenticator_is_impossible_in_production_mode(self) -> None:
         with self.assertRaisesRegex(ValueError, "forbidden"):
@@ -185,7 +193,7 @@ class S3ApiShellTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(missing.json()["message"], "Route not found")
         self.assertNotIn("private-secret-route", str(missing.json()))
         self.assertEqual(invalid.status_code, 422)
-        self.assertEqual(invalid.json()["details"], {"fields": ["query.value"]})
+        self.assertEqual(invalid.json()["details"], {"locations": ["query"]})
         self.assertNotIn("private-secret", str(invalid.json()))
 
     async def test_unexpected_errors_hide_exception_text(self) -> None:

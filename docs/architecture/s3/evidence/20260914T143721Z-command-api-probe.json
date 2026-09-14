@@ -1,0 +1,20 @@
+{
+  "schema_version": "s3-command-api-probe.v1",
+  "project_ref": "jipewywqflgandjcqbjl",
+  "app_commit": "d870577",
+  "completed_at": "2026-09-14T14:37:21.119595+00:00",
+  "status": "passed",
+  "authentication_method": "password",
+  "model_provider_calls_expected": 0,
+  "checks": [
+    "anonymous command was rejected",
+    "real password JWT resolved to a server-owned principal",
+    "first authenticated command created one durable queued job",
+    "same tenant and intent replayed the existing job",
+    "changed intent with the same key returned a conflict",
+    "the same key was independent in a second tenant",
+    "cross-tenant job lookup revealed no foreign record",
+    "temporary users and cascading command/job/outbox rows were removed"
+  ],
+  "cleanup_verified": true
+}
