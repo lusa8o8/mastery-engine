@@ -266,6 +266,28 @@ class PostgresJobRepository:
             with connection.cursor(row_factory=dict_row) as cursor:
                 return self._select_job(cursor, tenant_id, job_id)
 
+    def get_command(
+        self, tenant_id: UUID, command_id: UUID
+    ) -> CommandEnvelope:
+        with self._connection_factory() as connection:
+            with connection.cursor(row_factory=dict_row) as cursor:
+                cursor.execute(
+                    """
+                    select request_id, command_id, command_type, principal_id,
+                           tenant_id, idempotency_key, payload_schema_version,
+                           payload, requested_at
+                    from public.platform_commands
+                    where tenant_id = %s and command_id = %s
+                    """,
+                    (tenant_id, command_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise JobNotFound("command not found")
+                return CommandEnvelope.model_validate(
+                    {"schema_version": "command.v1", **row}
+                )
+
     def request_cancellation(
         self, tenant_id: UUID, job_id: UUID, *, now: datetime
     ) -> WorkflowJob:

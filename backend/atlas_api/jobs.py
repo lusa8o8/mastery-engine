@@ -92,6 +92,10 @@ class JobRepository(Protocol):
 
     def get(self, tenant_id: UUID, job_id: UUID) -> WorkflowJob: ...
 
+    def get_command(
+        self, tenant_id: UUID, command_id: UUID
+    ) -> CommandEnvelope: ...
+
     def request_cancellation(
         self, tenant_id: UUID, job_id: UUID, *, now: datetime
     ) -> WorkflowJob: ...
@@ -152,6 +156,7 @@ class InMemoryJobRepository:
     def __init__(self) -> None:
         self._lock = RLock()
         self._jobs: dict[UUID, WorkflowJob] = {}
+        self._commands: dict[UUID, CommandEnvelope] = {}
         self._idempotency: dict[tuple[UUID, str], tuple[str, UUID]] = {}
 
     @staticmethod
@@ -196,6 +201,7 @@ class InMemoryJobRepository:
                 updated_at=now,
             )
             self._jobs[job_id] = job
+            self._commands[command.command_id] = command.model_copy(deep=True)
             self._idempotency[key] = (fingerprint, job_id)
             return SubmissionResult(self._copy(job), False)
 
@@ -206,6 +212,15 @@ class InMemoryJobRepository:
             if job is None or job.tenant_id != tenant_id:
                 raise JobNotFound("job not found")
             return self._copy(job)
+
+    def get_command(
+        self, tenant_id: UUID, command_id: UUID
+    ) -> CommandEnvelope:
+        with self._lock:
+            command = self._commands.get(command_id)
+            if command is None or command.tenant_id != tenant_id:
+                raise JobNotFound("command not found")
+            return command.model_copy(deep=True)
 
     def request_cancellation(
         self, tenant_id: UUID, job_id: UUID, *, now: datetime
@@ -369,6 +384,10 @@ class JobRuntime:
         self._id_factory = id_factory
         self._lease_duration = lease_duration
 
+    @property
+    def lease_duration(self) -> timedelta:
+        return self._lease_duration
+
     def submit(
         self,
         command: CommandEnvelope,
@@ -388,6 +407,11 @@ class JobRuntime:
 
     def get(self, tenant_id: UUID, job_id: UUID) -> WorkflowJob:
         return self._repository.get(tenant_id, job_id)
+
+    def command_for(self, lease: JobLease) -> CommandEnvelope:
+        return self._repository.get_command(
+            lease.job.tenant_id, lease.job.command_id
+        )
 
     def cancel(self, tenant_id: UUID, job_id: UUID) -> WorkflowJob:
         return self._repository.request_cancellation(

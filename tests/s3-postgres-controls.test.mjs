@@ -33,6 +33,7 @@ test('Postgres runtime uses database time, row locks, and atomic outbox writes',
 
 test('outbox delivery is leased and explicitly at-least-once', async () => {
   const sql = await read('supabase/migrations/202609140001_create_platform_workflow_runtime.sql')
+  const deadLetterSql = await read('supabase/migrations/202609140002_add_outbox_dead_letter_state.sql')
   const outbox = await read('backend/atlas_api/outbox.py')
   assert.match(sql, /publish_lease_token uuid/i)
   assert.match(sql, /publish_attempt_count between 0 and 20/i)
@@ -41,4 +42,7 @@ test('outbox delivery is leased and explicitly at-least-once', async () => {
   assert.match(outbox, /Consumers must deduplicate by event_id/i)
   assert.match(outbox, /publish_lease_token = %s/i)
   assert.match(outbox, /raise OutboxLeaseLost/i)
+  assert.match(deadLetterSql, /dead_lettered_at timestamptz/i)
+  assert.match(deadLetterSql, /published_at is null and dead_lettered_at is null/i)
+  assert.match(outbox, /def dead_letter/i)
 })

@@ -328,10 +328,13 @@ attempts, stale-worker rejection, cancellation and retry scheduling. The same
 semantics now have a Postgres repository and leased transactional outbox; the
 additive schema is applied to the linked Supabase project and its self-cleaning
 live probe passes. PostgreSQL owns durable time calculations so worker clock
-skew cannot invalidate retry schedules. This is still a build milestone: no
-worker loop, publisher process, JWT verifier or model connection is enabled.
-Sanitized live evidence is recorded in
-[`s3/evidence/20260914T132454Z-postgres-runtime-probe.json`](s3/evidence/20260914T132454Z-postgres-runtime-probe.json).
+skew cannot invalidate retry schedules. Bounded worker and publisher batches now
+use allowlisted version routes, independent postcondition checks, hard handler
+timeouts, lease safety margins, classified retry and explicit dead-letter state.
+Fixture handlers have passed against the live durable repositories. This is
+still a build milestone: no continuously deployed worker/publisher process, JWT
+verifier or model connection is enabled. Sanitized evidence is recorded in
+[`s3/evidence/20260914T134412Z-postgres-runtime-probe.json`](s3/evidence/20260914T134412Z-postgres-runtime-probe.json).
 
 ### Purpose
 

@@ -61,6 +61,10 @@ class PostgresOutboxRepository:
         self._token_factory = token_factory
         self._lease_duration = lease_duration
 
+    @property
+    def lease_duration(self) -> timedelta:
+        return self._lease_duration
+
     @staticmethod
     def _event(row: dict[str, Any]) -> OutboxEvent:
         return OutboxEvent.model_validate(
@@ -80,6 +84,7 @@ class PostgresOutboxRepository:
                       select event_id
                       from public.outbox_events
                       where published_at is null
+                        and dead_lettered_at is null
                         and available_at <= %s
                         and publish_attempt_count < 20
                         and (
@@ -163,6 +168,42 @@ class PostgresOutboxRepository:
                     """,
                     (
                         database_now + retry_delay,
+                        error_code.value,
+                        lease.event.event_id,
+                        lease.lease_token,
+                        database_now,
+                    ),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise OutboxLeaseLost("outbox lease is no longer active")
+                return self._event(row)
+
+    def dead_letter(
+        self, lease: OutboxLease, error_code: ErrorCode
+    ) -> OutboxEvent:
+        """Permanently remove an invalid event from delivery, without deletion."""
+
+        with self._connection_factory() as connection:
+            with connection.cursor(row_factory=dict_row) as cursor:
+                cursor.execute("select now() as database_now")
+                database_now = cursor.fetchone()["database_now"]
+                cursor.execute(
+                    f"""
+                    update public.outbox_events as event
+                    set dead_lettered_at = %s,
+                        last_error_code = %s,
+                        publish_lease_token = null,
+                        publish_lease_expires_at = null
+                    where event.event_id = %s
+                      and event.published_at is null
+                      and event.dead_lettered_at is null
+                      and event.publish_lease_token = %s
+                      and event.publish_lease_expires_at > %s
+                    returning {OUTBOX_UPDATE_COLUMNS}
+                    """,
+                    (
+                        database_now,
                         error_code.value,
                         lease.event.event_id,
                         lease.lease_token,

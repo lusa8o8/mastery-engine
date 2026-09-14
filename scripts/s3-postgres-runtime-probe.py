@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import json
@@ -17,6 +18,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import psycopg
+from psycopg.types.json import Jsonb
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -29,6 +31,19 @@ from backend.atlas_api.jobs import (
 )
 from backend.atlas_api.outbox import OutboxLease, OutboxLeaseLost, PostgresOutboxRepository
 from backend.atlas_api.postgres_jobs import PostgresJobRepository
+from backend.atlas_api.publisher import (
+    EventRegistry,
+    EventRoute,
+    OutboxPublisher,
+    TransientPublishError,
+)
+from backend.atlas_api.retry import RetryPolicy
+from backend.atlas_api.worker import (
+    WorkflowDefinition,
+    WorkflowDisposition,
+    WorkflowRegistry,
+    WorkflowWorker,
+)
 from contracts.s2a.models import CommandEnvelope, ErrorCode
 
 
@@ -149,7 +164,7 @@ def write_report(project_ref: str, checks: list[str], cleanup_verified: bool) ->
     except (OSError, subprocess.SubprocessError):
         commit = "unknown"
     report = {
-        "schema_version": "s3-postgres-probe.v1",
+        "schema_version": "s3-runtime-probe.v2",
         "project_ref": project_ref,
         "app_commit": commit,
         "completed_at": datetime.now(timezone.utc).isoformat(),
@@ -310,6 +325,132 @@ def main() -> None:
                 published += 1
             assert published == 4
             checks.append("all four state events were leased and acknowledged")
+
+            loop_submission = durable_runtime.submit(
+                command(user_a, f"probe:{uuid4()}", delivery=1),
+                workflow_name="resource.extraction",
+                workflow_version="v1",
+            )
+
+            async def execute_fixture(context):
+                return {"command_id": str(context.command.command_id)}
+
+            async def verify_fixture(context, candidate):
+                assert candidate["command_id"] == str(context.job.command_id)
+                return WorkflowDisposition.SUCCEEDED
+
+            workflow_worker = WorkflowWorker(
+                durable_runtime,
+                WorkflowRegistry(
+                    [
+                        WorkflowDefinition(
+                            "resource.extraction",
+                            "v1",
+                            execute_fixture,
+                            verify_fixture,
+                            timeout_seconds=5,
+                        )
+                    ]
+                ),
+                jitter=lambda: 0.5,
+            )
+            worker_trace = asyncio.run(workflow_worker.run_once())
+            assert worker_trace is not None and worker_trace.status == "succeeded"
+            checks.append("durable worker executed and verified an allowlisted workflow")
+
+            unknown_event_id = uuid4()
+            with connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        insert into public.outbox_events (
+                          event_id, request_id, correlation_id,
+                          event_schema_version, tenant_id, aggregate_type,
+                          aggregate_id, event_type, payload, occurred_at,
+                          available_at
+                        ) values (
+                          %s, %s, %s, 'workflow_job_event.v1', %s,
+                          'workflow_job', %s, 'workflow.unregistered',
+                          %s, now(), now()
+                        )
+                        """,
+                        (
+                            unknown_event_id,
+                            loop_submission.job.request_id,
+                            loop_submission.job.request_id,
+                            user_a,
+                            loop_submission.job.job_id,
+                            Jsonb({"fixture": True}),
+                        ),
+                    )
+
+            transient_seen = False
+            delivered: set[UUID] = set()
+
+            async def deliver_fixture(event):
+                nonlocal transient_seen
+                if event.event_type == "workflow.job_queued" and not transient_seen:
+                    transient_seen = True
+                    raise TransientPublishError()
+                delivered.add(event.event_id)
+
+            publisher = OutboxPublisher(
+                outbox,
+                EventRegistry(
+                    [
+                        EventRoute(name, deliver_fixture, timeout_seconds=5)
+                        for name in (
+                            "workflow.job_queued",
+                            "workflow.job_claimed",
+                            "workflow.job_succeeded",
+                        )
+                    ]
+                ),
+                retry_policy=RetryPolicy(
+                    base_delay=timedelta(seconds=1),
+                    maximum_delay=timedelta(seconds=1),
+                    jitter_ratio=0,
+                ),
+                jitter=lambda: 0.5,
+            )
+
+            async def publish_fixtures() -> list[str]:
+                statuses: list[str] = []
+                deadline = monotonic() + 60
+                while monotonic() < deadline:
+                    trace = await publisher.run_once()
+                    if trace is None:
+                        if len(delivered) == 3 and "dead_lettered" in statuses:
+                            return statuses
+                        await asyncio.sleep(0.25)
+                        continue
+                    statuses.append(trace.status)
+                raise AssertionError(
+                    "publisher probe exceeded its deadline: "
+                    f"statuses={statuses}, delivered={len(delivered)}"
+                )
+
+            publisher_statuses = asyncio.run(publish_fixtures())
+            assert "retry_scheduled" in publisher_statuses
+            assert "dead_lettered" in publisher_statuses
+            checks.append("publisher retried transient delivery and dead-lettered unknown routing")
+
+            with connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        select
+                          count(*) filter (where published_at is not null),
+                          count(*) filter (where dead_lettered_at is not null)
+                        from public.outbox_events
+                        where (aggregate_id = %s and event_type <> 'workflow.unregistered')
+                           or event_id = %s
+                        """,
+                        (loop_submission.job.job_id, unknown_event_id),
+                    )
+                    published_count, dead_count = cursor.fetchone()
+                    assert published_count == 3 and dead_count == 1
+            checks.append("publisher postconditions were verified from Postgres")
         finally:
             for user_id in reversed(created_users):
                 delete_user(client, url, service_key, user_id)
