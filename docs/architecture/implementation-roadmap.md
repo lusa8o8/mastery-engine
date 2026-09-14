@@ -323,10 +323,15 @@ fixture-tested FastAPI shell and deterministic job-runtime semantics against the
 frozen S2A contracts. The shell starts locked, separates liveness from readiness,
 rejects protected access without injected authentication, emits typed
 content-safe errors, and forbids fixture authentication in production. The job
-runtime now proves tenant-scoped idempotency, explicit transitions, leases,
-bounded attempts, stale-worker rejection, cancellation and retry scheduling in
-memory. This is still a build milestone only: it has no Supabase, Postgres,
-durable worker, outbox or model connection.
+runtime proves tenant-scoped idempotency, explicit transitions, leases, bounded
+attempts, stale-worker rejection, cancellation and retry scheduling. The same
+semantics now have a Postgres repository and leased transactional outbox; the
+additive schema is applied to the linked Supabase project and its self-cleaning
+live probe passes. PostgreSQL owns durable time calculations so worker clock
+skew cannot invalidate retry schedules. This is still a build milestone: no
+worker loop, publisher process, JWT verifier or model connection is enabled.
+Sanitized live evidence is recorded in
+[`s3/evidence/20260914T132454Z-postgres-runtime-probe.json`](s3/evidence/20260914T132454Z-postgres-runtime-probe.json).
 
 ### Purpose
 

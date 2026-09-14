@@ -1,0 +1,22 @@
+{
+  "schema_version": "s3-postgres-probe.v1",
+  "project_ref": "jipewywqflgandjcqbjl",
+  "app_commit": "a911bd9",
+  "completed_at": "2026-09-14T13:24:54.980838+00:00",
+  "status": "passed",
+  "model_provider_calls_expected": 0,
+  "checks": [
+    "concurrent duplicate commands returned one durable job",
+    "different intent failed closed on idempotency conflict",
+    "cross-tenant repository read was hidden",
+    "outbox failure rolled back the job transition",
+    "two concurrent workers produced one lease",
+    "running cancellation stopped at the lease boundary",
+    "anonymous and authenticated browsers were denied",
+    "stale outbox publisher was rejected",
+    "failed delivery was safely scheduled for retry",
+    "all four state events were leased and acknowledged",
+    "temporary users and cascading workflow rows were removed"
+  ],
+  "cleanup_verified": true
+}

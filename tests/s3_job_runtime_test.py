@@ -153,7 +153,9 @@ class S3JobRuntimeTest(unittest.TestCase):
         lease = self.runtime.claim_next()
         assert lease is not None
         retry_at = self.clock.now + timedelta(minutes=2)
-        queued = self.runtime.finish(lease, JobOutcome.FAILED, retry_at=retry_at)
+        queued = self.runtime.finish(
+            lease, JobOutcome.FAILED, retry_delay=timedelta(minutes=2)
+        )
         self.assertEqual(queued.status, JobStatus.QUEUED)
         self.assertIsNone(self.runtime.claim_next())
         self.clock.advance(minutes=2)
@@ -166,7 +168,7 @@ class S3JobRuntimeTest(unittest.TestCase):
         failed = self.runtime.finish(
             lease,
             JobOutcome.FAILED,
-            retry_at=self.clock.now + timedelta(minutes=1),
+            retry_delay=timedelta(minutes=1),
         )
         self.assertEqual(failed.status, JobStatus.FAILED)
         self.assertIsNotNone(failed.completed_at)
@@ -226,10 +228,12 @@ class S3JobRuntimeTest(unittest.TestCase):
             self.runtime.finish(
                 lease,
                 JobOutcome.SUCCEEDED,
-                retry_at=self.clock.now + timedelta(minutes=1),
+                retry_delay=timedelta(minutes=1),
             )
         with self.assertRaises(InvalidJobTransition):
-            self.runtime.finish(lease, JobOutcome.FAILED, retry_at=self.clock.now)
+            self.runtime.finish(
+                lease, JobOutcome.FAILED, retry_delay=timedelta(0)
+            )
 
     def test_repository_returns_copies(self) -> None:
         submitted = self.submit()

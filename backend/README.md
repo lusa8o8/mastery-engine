@@ -21,6 +21,11 @@ wired to the building.
   transitions, bounded attempts, leased claims, stale-worker rejection,
   cooperative cancellation, and review routing. Its in-memory repository is a
   fixture adapter, not an application runtime option.
+- `atlas_api/postgres_jobs.py` preserves those rules in durable transactions,
+  uses PostgreSQL time and `FOR UPDATE SKIP LOCKED`, and writes state events to
+  the outbox before the transaction commits.
+- `atlas_api/outbox.py` leases events for bounded at-least-once publication.
+  Downstream consumers must deduplicate by the stable event ID.
 
 ## Local locked process
 
@@ -36,7 +41,7 @@ explicit principal fixtures.
 
 - Supabase JWT verification with pinned issuer/audience/algorithm and bounded
   JWKS refresh behavior.
-- Postgres repositories, durable job storage and transactional outbox.
+- Worker process and outbox publisher loops around the accepted repositories.
 - Model gateway, usage/cost limits and provider timeout classification.
 - Structured redacted telemetry and audit persistence.
 - S3 crash, retry, cancellation, authorization and tenant-isolation gates.

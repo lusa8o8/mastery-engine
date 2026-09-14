@@ -108,7 +108,7 @@ class JobRepository(Protocol):
         expected_lease_expires_at: datetime,
         outcome: JobOutcome,
         now: datetime,
-        retry_at: datetime | None = None,
+        retry_delay: timedelta | None = None,
     ) -> WorkflowJob: ...
 
 
@@ -296,7 +296,7 @@ class InMemoryJobRepository:
         expected_lease_expires_at: datetime,
         outcome: JobOutcome,
         now: datetime,
-        retry_at: datetime | None = None,
+        retry_delay: timedelta | None = None,
     ) -> WorkflowJob:
         with self._lock:
             job = self.get(tenant_id, job_id)
@@ -316,11 +316,11 @@ class InMemoryJobRepository:
                     completed_at=now,
                     updated_at=now,
                 )
-            elif retry_at is not None:
+            elif retry_delay is not None:
                 if outcome != JobOutcome.FAILED:
                     raise InvalidJobTransition("only a failed attempt may request retry")
-                if retry_at <= now:
-                    raise InvalidJobTransition("retry_at must be in the future")
+                if retry_delay <= timedelta(0):
+                    raise InvalidJobTransition("retry_delay must be positive")
                 if job.attempt_count >= job.max_attempts:
                     updated = _transition(
                         job,
@@ -334,7 +334,7 @@ class InMemoryJobRepository:
                         job,
                         JobStatus.QUEUED,
                         lease_expires_at=None,
-                        available_at=retry_at,
+                        available_at=now + retry_delay,
                         updated_at=now,
                     )
             else:
@@ -404,7 +404,7 @@ class JobRuntime:
         lease: JobLease,
         outcome: JobOutcome,
         *,
-        retry_at: datetime | None = None,
+        retry_delay: timedelta | None = None,
     ) -> WorkflowJob:
         return self._repository.finish(
             lease.job.tenant_id,
@@ -412,5 +412,5 @@ class JobRuntime:
             expected_lease_expires_at=lease.expected_lease_expires_at,
             outcome=outcome,
             now=self._clock(),
-            retry_at=retry_at,
+            retry_delay=retry_delay,
         )
