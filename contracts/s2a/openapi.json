@@ -1,0 +1,784 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Atlas S2A Common Contracts",
+    "version": "1.0.0"
+  },
+  "paths": {},
+  "components": {
+    "schemas": {
+      "principal": {
+        "$defs": {
+          "AuthMethod": {
+            "enum": [
+              "password",
+              "google"
+            ],
+            "title": "AuthMethod",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "principal.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "principal_id": {
+            "format": "uuid",
+            "title": "Principal Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "auth_method": {
+            "$ref": "#/$defs/AuthMethod"
+          },
+          "authenticated_at": {
+            "format": "date-time",
+            "title": "Authenticated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "principal_id",
+          "tenant_id",
+          "auth_method",
+          "authenticated_at"
+        ],
+        "title": "Principal",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/principal.v1.schema.json"
+      },
+      "auth_return_target": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "auth_return_target.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "origin": {
+            "maxLength": 255,
+            "minLength": 8,
+            "title": "Origin",
+            "type": "string"
+          },
+          "return_path": {
+            "default": "/home",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Return Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "origin"
+        ],
+        "title": "AuthReturnTarget",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/auth_return_target.v1.schema.json"
+      },
+      "command": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "command.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "command_id": {
+            "format": "uuid",
+            "title": "Command Id",
+            "type": "string"
+          },
+          "command_type": {
+            "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+            "title": "Command Type",
+            "type": "string"
+          },
+          "principal_id": {
+            "format": "uuid",
+            "title": "Principal Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 128,
+            "minLength": 8,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "payload_schema_version": {
+            "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
+            "title": "Payload Schema Version",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema_version",
+          "command_id",
+          "command_type",
+          "principal_id",
+          "tenant_id",
+          "idempotency_key",
+          "payload_schema_version",
+          "payload",
+          "requested_at"
+        ],
+        "title": "CommandEnvelope",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/command.v1.schema.json"
+      },
+      "error": {
+        "$defs": {
+          "ErrorCode": {
+            "enum": [
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "CONFLICT",
+              "INVALID_INPUT",
+              "RATE_LIMITED",
+              "DEPENDENCY_FAILED",
+              "INTERNAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "error.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "code": {
+            "$ref": "#/$defs/ErrorCode"
+          },
+          "message": {
+            "maxLength": 240,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "http_status": {
+            "maximum": 599,
+            "minimum": 400,
+            "title": "Http Status",
+            "type": "integer"
+          },
+          "retryable": {
+            "default": false,
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          }
+        },
+        "required": [
+          "schema_version",
+          "request_id",
+          "code",
+          "message",
+          "http_status"
+        ],
+        "title": "ErrorEnvelope",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/error.v1.schema.json"
+      },
+      "workflow_job": {
+        "$defs": {
+          "JobStatus": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "review_required"
+            ],
+            "title": "JobStatus",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "workflow_job.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "command_id": {
+            "format": "uuid",
+            "title": "Command Id",
+            "type": "string"
+          },
+          "workflow_name": {
+            "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+            "title": "Workflow Name",
+            "type": "string"
+          },
+          "workflow_version": {
+            "pattern": "^v[1-9][0-9]*$",
+            "title": "Workflow Version",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/JobStatus"
+          },
+          "attempt_count": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "max_attempts": {
+            "default": 3,
+            "maximum": 10,
+            "minimum": 1,
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "lease_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lease Expires At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Completed At"
+          }
+        },
+        "required": [
+          "schema_version",
+          "job_id",
+          "tenant_id",
+          "command_id",
+          "workflow_name",
+          "workflow_version",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkflowJob",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/workflow_job.v1.schema.json"
+      },
+      "workflow_step": {
+        "$defs": {
+          "ErrorCode": {
+            "enum": [
+              "UNAUTHENTICATED",
+              "FORBIDDEN",
+              "NOT_FOUND",
+              "CONFLICT",
+              "INVALID_INPUT",
+              "RATE_LIMITED",
+              "DEPENDENCY_FAILED",
+              "INTERNAL_ERROR"
+            ],
+            "title": "ErrorCode",
+            "type": "string"
+          },
+          "StepStatus": {
+            "enum": [
+              "pending",
+              "running",
+              "succeeded",
+              "failed",
+              "skipped"
+            ],
+            "title": "StepStatus",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "workflow_step.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "step_id": {
+            "format": "uuid",
+            "title": "Step Id",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "step_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9._:-]+$",
+            "title": "Step Key",
+            "type": "string"
+          },
+          "step_name": {
+            "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+            "title": "Step Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/StepStatus"
+          },
+          "attempt_count": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Started At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Completed At"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/ErrorCode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "schema_version",
+          "step_id",
+          "job_id",
+          "tenant_id",
+          "step_key",
+          "step_name",
+          "status"
+        ],
+        "title": "WorkflowStep",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/workflow_step.v1.schema.json"
+      },
+      "model_call": {
+        "$defs": {
+          "ModelCallStatus": {
+            "enum": [
+              "reserved",
+              "running",
+              "succeeded",
+              "failed",
+              "rejected"
+            ],
+            "title": "ModelCallStatus",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "model_call.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "model_call_id": {
+            "format": "uuid",
+            "title": "Model Call Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "job_id": {
+            "format": "uuid",
+            "title": "Job Id",
+            "type": "string"
+          },
+          "step_id": {
+            "format": "uuid",
+            "title": "Step Id",
+            "type": "string"
+          },
+          "route": {
+            "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+            "title": "Route",
+            "type": "string"
+          },
+          "provider": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Provider",
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_version": {
+            "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
+            "title": "Prompt Version",
+            "type": "string"
+          },
+          "output_schema_version": {
+            "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
+            "title": "Output Schema Version",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/$defs/ModelCallStatus"
+          },
+          "input_tokens": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "cost_usd_micros": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Cost Usd Micros",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Completed At"
+          }
+        },
+        "required": [
+          "schema_version",
+          "model_call_id",
+          "tenant_id",
+          "job_id",
+          "step_id",
+          "route",
+          "provider",
+          "model",
+          "prompt_version",
+          "output_schema_version",
+          "status",
+          "started_at"
+        ],
+        "title": "ModelCallRecord",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/model_call.v1.schema.json"
+      },
+      "outbox_event": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "outbox_event.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "event_id": {
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_schema_version": {
+            "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
+            "title": "Event Schema Version",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "aggregate_type": {
+            "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+            "title": "Aggregate Type",
+            "type": "string"
+          },
+          "aggregate_id": {
+            "format": "uuid",
+            "title": "Aggregate Id",
+            "type": "string"
+          },
+          "event_type": {
+            "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+            "title": "Event Type",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "available_at": {
+            "format": "date-time",
+            "title": "Available At",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Published At"
+          }
+        },
+        "required": [
+          "schema_version",
+          "event_id",
+          "event_schema_version",
+          "tenant_id",
+          "aggregate_type",
+          "aggregate_id",
+          "event_type",
+          "payload",
+          "occurred_at",
+          "available_at"
+        ],
+        "title": "OutboxEvent",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/outbox_event.v1.schema.json"
+      },
+      "audit_event": {
+        "$defs": {
+          "AuditOutcome": {
+            "enum": [
+              "succeeded",
+              "denied",
+              "failed"
+            ],
+            "title": "AuditOutcome",
+            "type": "string"
+          },
+          "AuthMethod": {
+            "enum": [
+              "password",
+              "google"
+            ],
+            "title": "AuthMethod",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "audit_event.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "audit_event_id": {
+            "format": "uuid",
+            "title": "Audit Event Id",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "format": "uuid",
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "principal_id": {
+            "format": "uuid",
+            "title": "Principal Id",
+            "type": "string"
+          },
+          "auth_method": {
+            "$ref": "#/$defs/AuthMethod"
+          },
+          "action": {
+            "pattern": "^[a-z][a-z0-9_.-]{2,79}$",
+            "title": "Action",
+            "type": "string"
+          },
+          "target_type": {
+            "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+            "title": "Target Type",
+            "type": "string"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target Id"
+          },
+          "outcome": {
+            "$ref": "#/$defs/AuditOutcome"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reason Code"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "title": "Metadata",
+            "type": "object"
+          }
+        },
+        "required": [
+          "schema_version",
+          "audit_event_id",
+          "request_id",
+          "tenant_id",
+          "principal_id",
+          "auth_method",
+          "action",
+          "target_type",
+          "outcome",
+          "occurred_at"
+        ],
+        "title": "AuditEvent",
+        "type": "object",
+        "$id": "https://schemas.atlas.local/s2a/audit_event.v1.schema.json"
+      }
+    }
+  }
+}

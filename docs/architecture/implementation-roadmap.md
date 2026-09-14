@@ -19,8 +19,8 @@ The governing rule is:
 | S1 production stabilization | Complete | Rebuildable schema, tenant policies, verified server identity, server-owned quotas/model allowances, durable tutor resume, retry-safe extraction, Google OAuth, CI, and production rollout are in place. |
 | S1 authenticated browser gate | Complete | Two distinct test tenants passed the current-journey checks: User A resume/extraction worked and User B could neither see User A's paper nor open User A's session. |
 | S1 production-isolated security probe | Complete | Eleven authenticated, anonymous, database, Storage, function, and allowance checks passed against UUID-namespaced fixtures in the current test-only project; both temporary users, the object, and all probe rows were removed and verified absent. |
-| S2A contract drafting | Ready now | Define the shared identity, command, error, idempotency, job, model-call, outbox, and audit contracts. |
-| S4A extraction baseline | Ready in parallel | Turn reviewed tutorial sheets and papers into versioned development and held-out OCR/extraction cases without changing production behavior. |
+| S2A contract drafting | In progress | The first Pydantic source models, generated JSON Schema/OpenAPI/TypeScript artifacts, cross-language fixtures, ownership rules, and callback checks exist. Architecture review is still required before the pack is frozen. |
+| S4A extraction baseline | In progress | Dataset governance, split checks, planned synthetic cases, and a private PDF candidate registry exist. Reviewed ground truth and an isolated executable held-out set are still required. |
 | S3 live platform integration | Blocked by S2A | The S1 gate is accepted. Do not connect the new Python API/worker to live state until the required S2A contracts are frozen and S3's own authorization, recovery, idempotency, timeout, and observability tests pass. |
 
 Recent implementation evidence is maintained in [`s1/README.md`](s1/README.md) and [`s1/production-rollout.md`](s1/production-rollout.md). The successful legacy extraction smoke run establishes current behavior only; it is not evidence that the future OCR/layout pipeline meets S6 quality gates.
@@ -240,6 +240,13 @@ Freeze shared language in dependency-sized packs. Contract-first remains the mai
 
 ### S2A — Common platform contracts
 
+Implementation checkpoint (14 September 2026): `contracts/s2a/` now contains
+the first draft source models and generated portable artifacts. Python and
+JavaScript validate the same normal, empty, partial, invalid, legacy, and auth
+fixtures. The pack remains a draft until lifecycle/ownership review is accepted
+and downstream S3 consumers prove the shapes are sufficient; no live runtime
+integration is authorized by this checkpoint.
+
 - Authenticated principal, tenant scope, commands, typed errors, idempotency, workflow jobs/steps, model calls, outbox events, and audit events.
 - Principal identity is the stable Supabase user ID. Authentication method (`password`, `google`, or a later provider) is audit metadata, never a tenant key, ownership key, role, or authorization decision.
 - Auth callback and return-path contracts allow only configured Atlas origins and validated relative application paths.
@@ -382,6 +389,14 @@ API shell, job runner, model gateway, and observability can be owned separately 
 Make quality measurable before prompt and model choices harden. Dataset governance and baseline capture begin during S0; reusable runner implementation follows the contracts it measures.
 
 ### S4A — Baseline and evaluation contract
+
+Implementation checkpoint (14 September 2026): the extraction dataset schema,
+development scaffold, deliberately empty held-out manifest, and deterministic
+split validator are present under `evals/datasets/extraction/`. Two local
+tutorial PDFs have been registered as private candidates by hash and page count
+only. They remain git-ignored and have not been copied, extracted, uploaded, or
+assigned to a split. The release form of the validator intentionally fails until
+reviewed executable development and independently protected held-out cases exist.
 
 - Begin during S0 while the current application is still observable.
 - Assign immutable case IDs and record journey, source, consent/license status, redaction, expected behavior, critical-failure labels, and intended split.

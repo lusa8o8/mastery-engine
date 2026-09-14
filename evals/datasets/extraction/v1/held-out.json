@@ -1,0 +1,6 @@
+{
+  "dataset_version": "extraction-dataset.v1",
+  "workflow": "resource_extraction",
+  "status": "baseline_scaffold",
+  "cases": []
+}

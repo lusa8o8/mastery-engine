@@ -1,0 +1,66 @@
+{
+  "$defs": {
+    "ErrorCode": {
+      "enum": [
+        "UNAUTHENTICATED",
+        "FORBIDDEN",
+        "NOT_FOUND",
+        "CONFLICT",
+        "INVALID_INPUT",
+        "RATE_LIMITED",
+        "DEPENDENCY_FAILED",
+        "INTERNAL_ERROR"
+      ],
+      "title": "ErrorCode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "error.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "code": {
+      "$ref": "#/$defs/ErrorCode"
+    },
+    "message": {
+      "maxLength": 240,
+      "minLength": 1,
+      "title": "Message",
+      "type": "string"
+    },
+    "http_status": {
+      "maximum": 599,
+      "minimum": 400,
+      "title": "Http Status",
+      "type": "integer"
+    },
+    "retryable": {
+      "default": false,
+      "title": "Retryable",
+      "type": "boolean"
+    },
+    "details": {
+      "additionalProperties": true,
+      "title": "Details",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "code",
+    "message",
+    "http_status"
+  ],
+  "title": "ErrorEnvelope",
+  "type": "object",
+  "$id": "https://schemas.atlas.local/s2a/error.v1.schema.json"
+}

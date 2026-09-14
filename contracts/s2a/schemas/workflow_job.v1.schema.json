@@ -1,0 +1,115 @@
+{
+  "$defs": {
+    "JobStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "review_required"
+      ],
+      "title": "JobStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "workflow_job.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "job_id": {
+      "format": "uuid",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "command_id": {
+      "format": "uuid",
+      "title": "Command Id",
+      "type": "string"
+    },
+    "workflow_name": {
+      "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+      "title": "Workflow Name",
+      "type": "string"
+    },
+    "workflow_version": {
+      "pattern": "^v[1-9][0-9]*$",
+      "title": "Workflow Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/JobStatus"
+    },
+    "attempt_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Attempt Count",
+      "type": "integer"
+    },
+    "max_attempts": {
+      "default": 3,
+      "maximum": 10,
+      "minimum": 1,
+      "title": "Max Attempts",
+      "type": "integer"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "lease_expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lease Expires At"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    }
+  },
+  "required": [
+    "schema_version",
+    "job_id",
+    "tenant_id",
+    "command_id",
+    "workflow_name",
+    "workflow_version",
+    "status",
+    "created_at",
+    "updated_at"
+  ],
+  "title": "WorkflowJob",
+  "type": "object",
+  "$id": "https://schemas.atlas.local/s2a/workflow_job.v1.schema.json"
+}

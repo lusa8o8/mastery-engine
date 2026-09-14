@@ -1,0 +1,48 @@
+{
+  "$defs": {
+    "AuthMethod": {
+      "enum": [
+        "password",
+        "google"
+      ],
+      "title": "AuthMethod",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "principal.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "principal_id": {
+      "format": "uuid",
+      "title": "Principal Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "auth_method": {
+      "$ref": "#/$defs/AuthMethod"
+    },
+    "authenticated_at": {
+      "format": "date-time",
+      "title": "Authenticated At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "principal_id",
+    "tenant_id",
+    "auth_method",
+    "authenticated_at"
+  ],
+  "title": "Principal",
+  "type": "object",
+  "$id": "https://schemas.atlas.local/s2a/principal.v1.schema.json"
+}

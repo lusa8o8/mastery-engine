@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "auth_return_target.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "origin": {
+      "maxLength": 255,
+      "minLength": 8,
+      "title": "Origin",
+      "type": "string"
+    },
+    "return_path": {
+      "default": "/home",
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Return Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "origin"
+  ],
+  "title": "AuthReturnTarget",
+  "type": "object",
+  "$id": "https://schemas.atlas.local/s2a/auth_return_target.v1.schema.json"
+}

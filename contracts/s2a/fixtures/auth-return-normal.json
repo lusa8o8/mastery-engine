@@ -1,0 +1,5 @@
+{
+  "schema_version": "auth_return_target.v1",
+  "origin": "http://localhost:5173",
+  "return_path": "/home"
+}

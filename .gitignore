@@ -5,3 +5,6 @@ dist/
 .env*.local
 .claude/
 supabase/.temp/
+evals/private/
+__pycache__/
+*.py[cod]

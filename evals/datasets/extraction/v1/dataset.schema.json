@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atlas.local/evals/extraction-dataset.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dataset_version", "workflow", "status", "cases"],
+  "properties": {
+    "dataset_version": {"const": "extraction-dataset.v1"},
+    "workflow": {"const": "resource_extraction"},
+    "status": {"enum": ["baseline_scaffold", "reviewed", "retired"]},
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "split", "category", "fixture_status", "source", "expected_behavior", "intended_graders", "critical_failure_labels", "leakage_restrictions"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^ocr-[a-z0-9-]+-v[1-9][0-9]*$"},
+          "split": {"enum": ["development", "held_out"]},
+          "category": {"type": "string", "minLength": 3},
+          "fixture_status": {"enum": ["planned", "reviewed", "executable"]},
+          "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source_id", "source_kind", "entity_group_id", "consent_status", "license_status", "redaction_status", "media_type"],
+            "properties": {
+              "source_id": {"type": "string", "pattern": "^(planned:[a-z0-9-]+|sha256:[a-f0-9]{64})$"},
+              "source_kind": {"enum": ["synthetic", "private_user_resource"]},
+              "entity_group_id": {"type": "string", "minLength": 3},
+              "consent_status": {"enum": ["synthetic", "local_evaluation_only", "review_required"]},
+              "license_status": {"enum": ["synthetic", "private_not_redistributable", "unknown"]},
+              "redaction_status": {"enum": ["not_required", "pending", "complete"]},
+              "media_type": {"const": "application/pdf"},
+              "page_count": {"type": "integer", "minimum": 1}
+            }
+          },
+          "expected_behavior": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["outcome", "requirements"],
+            "properties": {
+              "outcome": {"enum": ["extract", "review_required", "reject"]},
+              "requirements": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 3}}
+            }
+          },
+          "intended_graders": {"type": "array", "minItems": 1, "items": {"enum": ["schema", "transcription", "segmentation", "evidence_location", "human_math_review", "security"]}},
+          "critical_failure_labels": {"type": "array", "items": {"type": "string", "minLength": 3}},
+          "leakage_restrictions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 3}}
+        }
+      }
+    }
+  }
+}

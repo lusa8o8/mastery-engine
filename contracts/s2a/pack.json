@@ -1,0 +1,19 @@
+{
+  "pack": "s2a-common-platform",
+  "version": "1.0.0-draft.1",
+  "status": "draft",
+  "dependencies": [],
+  "source_of_truth": "models.py",
+  "generated_artifacts": ["openapi.json", "types.ts", "schemas/*.json"],
+  "contracts": [
+    "principal.v1",
+    "auth_return_target.v1",
+    "command.v1",
+    "error.v1",
+    "workflow_job.v1",
+    "workflow_step.v1",
+    "model_call.v1",
+    "outbox_event.v1",
+    "audit_event.v1"
+  ]
+}

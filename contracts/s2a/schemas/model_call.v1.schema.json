@@ -1,0 +1,126 @@
+{
+  "$defs": {
+    "ModelCallStatus": {
+      "enum": [
+        "reserved",
+        "running",
+        "succeeded",
+        "failed",
+        "rejected"
+      ],
+      "title": "ModelCallStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "model_call.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "model_call_id": {
+      "format": "uuid",
+      "title": "Model Call Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "job_id": {
+      "format": "uuid",
+      "title": "Job Id",
+      "type": "string"
+    },
+    "step_id": {
+      "format": "uuid",
+      "title": "Step Id",
+      "type": "string"
+    },
+    "route": {
+      "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+      "title": "Route",
+      "type": "string"
+    },
+    "provider": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Provider",
+      "type": "string"
+    },
+    "model": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Model",
+      "type": "string"
+    },
+    "prompt_version": {
+      "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
+      "title": "Prompt Version",
+      "type": "string"
+    },
+    "output_schema_version": {
+      "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
+      "title": "Output Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ModelCallStatus"
+    },
+    "input_tokens": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Input Tokens",
+      "type": "integer"
+    },
+    "output_tokens": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Output Tokens",
+      "type": "integer"
+    },
+    "cost_usd_micros": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Cost Usd Micros",
+      "type": "integer"
+    },
+    "started_at": {
+      "format": "date-time",
+      "title": "Started At",
+      "type": "string"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    }
+  },
+  "required": [
+    "schema_version",
+    "model_call_id",
+    "tenant_id",
+    "job_id",
+    "step_id",
+    "route",
+    "provider",
+    "model",
+    "prompt_version",
+    "output_schema_version",
+    "status",
+    "started_at"
+  ],
+  "title": "ModelCallRecord",
+  "type": "object",
+  "$id": "https://schemas.atlas.local/s2a/model_call.v1.schema.json"
+}

@@ -1,0 +1,83 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "outbox_event.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event_id": {
+      "format": "uuid",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_schema_version": {
+      "pattern": "^[a-z][a-z0-9_.-]+\\.v[1-9][0-9]*$",
+      "title": "Event Schema Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "aggregate_type": {
+      "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+      "title": "Aggregate Type",
+      "type": "string"
+    },
+    "aggregate_id": {
+      "format": "uuid",
+      "title": "Aggregate Id",
+      "type": "string"
+    },
+    "event_type": {
+      "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+      "title": "Event Type",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "available_at": {
+      "format": "date-time",
+      "title": "Available At",
+      "type": "string"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Published At"
+    }
+  },
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_schema_version",
+    "tenant_id",
+    "aggregate_type",
+    "aggregate_id",
+    "event_type",
+    "payload",
+    "occurred_at",
+    "available_at"
+  ],
+  "title": "OutboxEvent",
+  "type": "object",
+  "$id": "https://schemas.atlas.local/s2a/outbox_event.v1.schema.json"
+}

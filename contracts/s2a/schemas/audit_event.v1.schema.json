@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "AuditOutcome": {
+      "enum": [
+        "succeeded",
+        "denied",
+        "failed"
+      ],
+      "title": "AuditOutcome",
+      "type": "string"
+    },
+    "AuthMethod": {
+      "enum": [
+        "password",
+        "google"
+      ],
+      "title": "AuthMethod",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "audit_event.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "audit_event_id": {
+      "format": "uuid",
+      "title": "Audit Event Id",
+      "type": "string"
+    },
+    "request_id": {
+      "format": "uuid",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "tenant_id": {
+      "format": "uuid",
+      "title": "Tenant Id",
+      "type": "string"
+    },
+    "principal_id": {
+      "format": "uuid",
+      "title": "Principal Id",
+      "type": "string"
+    },
+    "auth_method": {
+      "$ref": "#/$defs/AuthMethod"
+    },
+    "action": {
+      "pattern": "^[a-z][a-z0-9_.-]{2,79}$",
+      "title": "Action",
+      "type": "string"
+    },
+    "target_type": {
+      "pattern": "^[a-z][a-z0-9_.-]{2,63}$",
+      "title": "Target Type",
+      "type": "string"
+    },
+    "target_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Id"
+    },
+    "outcome": {
+      "$ref": "#/$defs/AuditOutcome"
+    },
+    "reason_code": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason Code"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "audit_event_id",
+    "request_id",
+    "tenant_id",
+    "principal_id",
+    "auth_method",
+    "action",
+    "target_type",
+    "outcome",
+    "occurred_at"
+  ],
+  "title": "AuditEvent",
+  "type": "object",
+  "$id": "https://schemas.atlas.local/s2a/audit_event.v1.schema.json"
+}
